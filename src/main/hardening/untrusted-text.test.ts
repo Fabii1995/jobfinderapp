@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { stripHtml } from '../sources/http'
 import { fetchGreenhouse } from '../sources/greenhouse'
-import type { Http } from '../sources/types'
+import type { Http, RawJob } from '../sources/types'
 
 const noMarkup = (s: string): void => {
   expect(s).not.toMatch(/<\s*\/?\s*[a-z!][^>]*>/i)
@@ -52,7 +52,7 @@ describe('stripHtml: tags and scripts do not survive', () => {
     }
   })
 
-  // WEAKNESS: entity decoding runs AFTER tag stripping, so encoded markup becomes literal markup.
+  // Regression: entity decoding must not turn encoded markup into literal markup.
   it('entity-encoded tags (&lt;script&gt;) do not become literal <script> text', () => {
     expect(stripHtml('&lt;script&gt;alert(1)&lt;/script&gt;')).not.toContain('<script')
   })
@@ -65,8 +65,8 @@ describe('stripHtml: tags and scripts do not survive', () => {
     expect(stripHtml('&bogus; &amp;amp;')).toBe('&bogus; &amp;')
   })
 
-  // WEAKNESS: String.fromCodePoint throws RangeError on out-of-range numeric entities, so one
-  // hostile description makes normalization (and therefore the whole source fetch) throw.
+  // Regression: out-of-range numeric entities must not throw (one hostile description would otherwise
+  // break normalization and the whole source fetch).
   it('out-of-range numeric entity (&#99999999;) does not throw', () => {
     expect(() => stripHtml('a &#99999999; b')).not.toThrow()
   })
@@ -106,9 +106,7 @@ describe('stripHtml: tags and scripts do not survive', () => {
     expect(stripHtml('<script>one</script><p>keep</p><script>two</script>')).toBe('keep')
   })
 
-  // WEAKNESS (DoS): /<[^>]+>/g is O(n^2) on a run of '<' with no '>'. 100k chars ~ 6s of
-  // synchronous main-process time (20k ~ 0.1s); a 1MB hostile description would freeze the app.
-  // Remove .fails once fixed (e.g. /<[^<>]+>/g).
+  // Regression (DoS): a run of '<' with no '>' must not be quadratic (it would freeze the main process).
   it('100k unclosed "<" is processed in under 1s', () => {
     const t = Date.now()
     stripHtml('<'.repeat(100_000))
@@ -117,7 +115,7 @@ describe('stripHtml: tags and scripts do not survive', () => {
 })
 
 describe('source normalizers', () => {
-  const gh = async (job: Record<string, unknown>) => {
+  const gh = async (job: Record<string, unknown>): Promise<RawJob[]> => {
     const http: Http = { getJson: async () => ({ jobs: [job] }), postJson: async () => ({}) }
     return fetchGreenhouse({ token: 'x' }, { id: 'greenhouse:x', name: 'X', http })
   }

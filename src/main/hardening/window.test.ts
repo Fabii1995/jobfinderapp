@@ -28,8 +28,12 @@ vi.mock('electron', () => {
     constructor(o: never) {
       h.opts = o
     }
-    on(): void {}
-    show(): void {}
+    on(): void {
+      /* not needed */
+    }
+    show(): void {
+      /* not needed */
+    }
     isDestroyed = (): boolean => false
     loadURL(u: string): void {
       h.loaded.push(u)
@@ -97,13 +101,8 @@ describe('BrowserWindow webPreferences', () => {
     expect(wp.nodeIntegrationInWorker).not.toBe(true)
     expect(wp.nodeIntegrationInSubFrames).not.toBe(true)
   })
-  // WEAKNESS (low/medium): sandbox is explicitly false (electron-vite template default). The
-  // preload imports @electron-toolkit/preload and so may need it, but a sandboxed preload using
-  // only contextBridge/ipcRenderer is the hardened default. Remove .fails if sandbox is enabled.
+  // A sandboxed preload using only contextBridge/ipcRenderer is the hardened default.
   it('sandbox is enabled', () => {
-    expect(h.opts!.webPreferences.sandbox).toBe(true)
-  })
-  it('records the actual sandbox value', () => {
     expect(h.opts!.webPreferences.sandbox).toBe(true)
   })
 })
@@ -132,9 +131,7 @@ describe('will-navigate (packaged / file origin)', () => {
       expect(nav(u), u).toBe(false)
     }
   })
-  // WEAKNESS (low): packaged mode accepts ANY file: URL, not only the app's index.html, so a
-  // navigation to file:///C:/Windows/... or a user-writable HTML file would be allowed
-  // (it would still lack the preload bridge only if loaded in a different frame; main frame keeps it).
+  // Regression: packaged mode must not accept arbitrary file: URLs, only the app's own index.html.
   it('blocks file: URLs outside the app renderer directory', () => {
     expect(nav('file:///C:/Users/victim/Downloads/evil.html')).toBe(false)
   })

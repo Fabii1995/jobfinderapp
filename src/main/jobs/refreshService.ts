@@ -2,7 +2,7 @@ import type { Db } from '../db'
 import type { RefreshResponse } from '../../shared/ipc'
 import { saveLastRefresh } from './queries'
 
-export interface RefreshServiceDeps {
+interface RefreshServiceDeps {
   db: Db
   /** Fetch + upsert (refreshJobs). */
   run: (db: Db) => Promise<RefreshResponse>

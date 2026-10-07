@@ -30,16 +30,16 @@ import type { ConnectorFn, RawJob } from './types'
  * city found in the first 400 characters of the description (often null), and workMode is `unknown`
  * unless the text says hybrid / fully remote.
  */
-export const SQLINK_BASE = 'https://www.sqlink.com'
-export const SQLINK_SITEMAP = `${SQLINK_BASE}/sitemap/`
-export const WINDOW_DAYS = 90
+const SQLINK_BASE = 'https://www.sqlink.com'
+const SQLINK_SITEMAP = `${SQLINK_BASE}/sitemap/`
+const WINDOW_DAYS = 90
 export const MAX_DETAIL = 150
-export const MIN_DELAY_MS = 1000
+const MIN_DELAY_MS = 1000
 const SKIP_CATEGORIES = new Set(['hardware', 'אלקטרוניקה', 'student'])
 const BLOCK_STATUS = /HTTP (?:401|403|407|429|5\d\d)\b/
 const CHALLENGE = /Just a moment\.\.\.|cf-chl-|Attention Required! \| Cloudflare|cf-browser-verification|captcha-delivery/i
 
-export interface SitemapJob {
+interface SitemapJob {
   url: string
   category: string
   slugTitle: string
@@ -80,7 +80,7 @@ export function selectCandidates(xml: string, now: number = Date.now(), windowDa
   return out.sort((a, b) => b.lastmod - a.lastmod)
 }
 
-export interface ParsedSqlinkJob {
+interface ParsedSqlinkJob {
   title: string
   description: string
   number: string | null

@@ -36,7 +36,7 @@ export const safeStorage: StateStorage = {
   }
 }
 
-// Storage key/shape is mirrored in public/theme-init.js (pre-paint script).
+// Storage key/shape is mirrored in src/renderer/public/theme-init.js (pre-paint script).
 export const useThemeStore = create<ThemeState>()(
   persist(
     (set) => ({
@@ -61,7 +61,7 @@ function systemPrefersDark(): boolean {
   return typeof window.matchMedia === 'function' && window.matchMedia(DARK_QUERY).matches
 }
 
-export function resolveTheme(theme: Theme): ResolvedTheme {
+function resolveTheme(theme: Theme): ResolvedTheme {
   if (theme === 'system') return systemPrefersDark() ? 'dark' : 'light'
   return theme
 }

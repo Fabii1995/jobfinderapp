@@ -1,26 +1,22 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync } from 'fs'
-import { tmpdir } from 'os'
+import { readFileSync, writeFileSync, existsSync } from 'fs'
 import { join } from 'path'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { IPC, MAX_COMPANY_NAME_LENGTH, MAX_URL_LENGTH } from '../shared/ipc'
-import { openDb, type Db } from './db'
+import { memDb, tempDirs } from './testing/db'
 import { upsertJobs, type ScoredJob } from './jobs/upsert'
 import { COMPANIES_FILE, loadCompanies } from './companies/store'
 import { isValidToken, isValidWorkdayHost, isValidWorkdaySite } from './sources/params'
 import type { CompanyEntry } from './companies/types'
 
-const handlers = new Map<string, (...args: unknown[]) => unknown>()
-vi.mock('electron', () => ({
-  ipcMain: { handle: (ch: string, fn: (...a: unknown[]) => unknown) => handlers.set(ch, fn) },
-  shell: { openExternal: vi.fn() }
-}))
+vi.mock('electron', async () => (await import('./testing/electron')).electronMock())
 
+import { handlers } from './testing/electron'
 import { addCompanyFromUrl, prettifyIdentifier, registerCompaniesIpc, UNSUPPORTED_MESSAGE } from './companiesIpc'
 
 type Res = { ok: boolean; error?: string; company?: CompanyEntry }
+const makeDir = tempDirs()
 let dir: string
-let db: Db
-let close: () => void
+const db = memDb()
 const probe = vi.fn<(e: CompanyEntry) => Promise<unknown>>()
 const resolveComeet = vi.fn<(u: string) => Promise<{ uid: string; token: string }>>()
 const deps = (): Parameters<typeof addCompanyFromUrl>[0] => ({ db, dir, probe, resolveComeet })
@@ -33,15 +29,10 @@ const fileText = (): string => readFileSync(join(dir, COMPANIES_FILE), 'utf8')
 
 beforeEach(() => {
   handlers.clear()
-  dir = mkdtempSync(join(tmpdir(), 'jf-cipc-'))
-  ;({ db, close } = openDb(':memory:'))
+  dir = makeDir('jf-cipc-')
   probe.mockReset().mockResolvedValue([])
   resolveComeet.mockReset().mockResolvedValue({ uid: 'AB.123', token: 'ABCDEF1234567890' })
   registerCompaniesIpc(deps())
-})
-afterEach(() => {
-  close()
-  rmSync(dir, { recursive: true, force: true })
 })
 
 describe('addCompanyFromUrl: supported boards', () => {
@@ -256,10 +247,8 @@ describe('addCompanyFromUrl: hostile strings never reach params unvalidated', ()
     expect(stored()).toHaveLength(raw.companies.length)
     expect(fileText()).not.toMatch(/DROP TABLE|<script|\.\.\//)
   })
-  // BUG (src/main/companies/detect.ts firstSegment/workday site: decodeURIComponent is not guarded):
-  // a malformed percent-escape makes addCompanyFromUrl REJECT (URIError) instead of returning
-  // { ok: false }. Marked it.fails so the suite stays green; flip to `it` once fixed.
-  it('malformed percent-escapes return ok:false instead of throwing (BUG: URIError escapes)', async () => {
+  // Regression: an unguarded decodeURIComponent used to make addCompanyFromUrl reject with a URIError.
+  it('malformed percent-escapes return ok:false instead of throwing', async () => {
     for (const u of [
       'https://careers.smartrecruiters.com/%E0%A4%A',
       'https://boards.greenhouse.io/%',

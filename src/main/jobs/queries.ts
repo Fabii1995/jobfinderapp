@@ -1,22 +1,17 @@
-import { and, count, desc, eq, isNotNull, isNull, or, sql } from 'drizzle-orm'
+import { and, count, desc, eq, isNotNull, isNull, sql } from 'drizzle-orm'
 import type { Db } from '../db'
 import { jobs, meta, type Job } from '../db/schema'
 import type { JobStats, LastRefresh } from '../../shared/ipc'
 
-export interface ListJobsOptions {
+interface ListJobsOptions {
   visited: boolean
-  /** Only jobs with this work mode ('onsite' | 'hybrid' | 'remote' | 'unknown'). */
-  workMode?: string
-  /** Only jobs whose company equals this (exact display name, as stored). */
-  company?: string
 }
 
 export function listJobs(db: Db, opts: ListJobsOptions): Job[] {
-  const conds = [opts.visited ? isNotNull(jobs.visitedAt) : isNull(jobs.visitedAt)]
-  if (opts.workMode === 'unknown') conds.push(or(eq(jobs.workMode, 'unknown'), isNull(jobs.workMode))!)
-  else if (opts.workMode) conds.push(eq(jobs.workMode, opts.workMode))
-  if (opts.company) conds.push(eq(jobs.company, opts.company))
-  const q = db.select().from(jobs).where(and(...conds))
+  const q = db
+    .select()
+    .from(jobs)
+    .where(opts.visited ? isNotNull(jobs.visitedAt) : isNull(jobs.visitedAt))
   return opts.visited
     ? q.orderBy(desc(jobs.visitedAt)).all()
     : q.orderBy(desc(jobs.score), sql`${jobs.postedAt} DESC NULLS LAST`).all()
@@ -86,18 +81,10 @@ export function getStats(db: Db): JobStats {
     })
     .from(jobs)
     .get()
-  const rows = db
-    .select({ source: jobs.source, n: count() })
-    .from(jobs)
-    .groupBy(jobs.source)
-    .all()
-  const bySource: Record<string, number> = {}
-  for (const r of rows) bySource[r.source] = r.n
   const lastRefresh = getLastRefresh(db)
   return {
     newCount: Number(totals?.newCount ?? 0),
     visitedCount: Number(totals?.visitedCount ?? 0),
-    bySource,
     lastRefreshAt: lastRefresh?.at ?? null,
     lastRefresh
   }

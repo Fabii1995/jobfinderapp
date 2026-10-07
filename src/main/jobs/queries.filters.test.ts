@@ -1,31 +1,17 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { openDb, type Db } from '../db'
+import { beforeEach, describe, expect, it } from 'vitest'
+import { memDb } from '../testing/db'
 import { jobs } from '../db/schema'
 import { upsertJobs, type ScoredJob } from './upsert'
+import { scoredJob } from '../testing/fixtures'
 import { getCompanyCounts, getStats, listJobs, markVisited } from './queries'
 
-let db: Db
-let close: () => void
-const mk = (source: string, id: string, company: string | null, workMode: ScoredJob['workMode'], score = 50): ScoredJob => ({
-  source,
-  externalId: id,
-  title: id,
-  company: company as string,
-  url: 'https://e.com/' + id,
-  description: null,
-  location: null,
-  country: 'IL',
-  city: null,
-  workMode,
-  postedAt: null,
-  score,
-  roles: []
-})
+const db = memDb()
+const mk = (source: string, id: string, company: string | null, workMode: ScoredJob['workMode'], score = 50): ScoredJob =>
+  scoredJob({ source, externalId: id, title: id, company: company as string, url: 'https://e.com/' + id, workMode, score })
 const snapshot = (): Array<[number, number, number | null]> =>
   db.select().from(jobs).orderBy(jobs.id).all().map((j) => [j.id, j.firstSeenAt, j.visitedAt])
 
 beforeEach(() => {
-  ;({ db, close } = openDb(':memory:'))
   upsertJobs(db, [
     mk('greenhouse:a', '1', 'Acme', 'onsite', 80),
     mk('greenhouse:a', '2', 'Acme', 'hybrid', 70),
@@ -35,65 +21,36 @@ beforeEach(() => {
     mk('amazon', '6', null, 'onsite', 35)
   ])
 })
-afterEach(() => close())
 
-describe('listJobs filters (real DB)', () => {
-  it('workMode filter', () => {
-    expect(listJobs(db, { visited: false, workMode: 'onsite' }).map((j) => j.title)).toEqual(['1', '3', '6'])
-    expect(listJobs(db, { visited: false, workMode: 'hybrid' }).map((j) => j.title)).toEqual(['2', '5'])
-    expect(listJobs(db, { visited: false, workMode: 'unknown' }).map((j) => j.title)).toEqual(['4'])
-    expect(listJobs(db, { visited: false, workMode: 'remote' })).toEqual([])
+describe('listJobs (real DB)', () => {
+  it('orders New by score desc and lists every row', () => {
+    expect(listJobs(db, { visited: false }).map((j) => j.score)).toEqual([90, 80, 70, 60, 40, 35])
   })
-  it('company filter is exact; null-company rows only appear unfiltered', () => {
-    expect(listJobs(db, { visited: false, company: 'Beta' }).map((j) => j.title)).toEqual(['4', '3'])
-    expect(listJobs(db, { visited: false, company: 'Bet' })).toEqual([])
-    expect(listJobs(db, { visited: false, company: 'beta' })).toEqual([])
-    expect(listJobs(db, { visited: false })).toHaveLength(6)
-  })
-  it('combined filters AND together; empty-string filters are treated as absent', () => {
-    expect(listJobs(db, { visited: false, company: 'Acme', workMode: 'hybrid' }).map((j) => j.title)).toEqual(['2'])
-    expect(listJobs(db, { visited: false, company: '', workMode: '' })).toHaveLength(6)
-  })
-  it('ordering is preserved under filters (score desc)', () => {
-    expect(listJobs(db, { visited: false, workMode: 'onsite' }).map((j) => j.score)).toEqual([80, 60, 35])
-  })
-  it('filters apply per tab and never change visitedAt / firstSeenAt', () => {
-    const id = listJobs(db, { visited: false, company: 'Acme', workMode: 'onsite' })[0].id
-    const visited = markVisited(db, id)!
+  it('list calls never change visitedAt / firstSeenAt', () => {
+    markVisited(db, listJobs(db, { visited: false })[0].id)
     const before = snapshot()
-    for (const o of [
-      { visited: false, workMode: 'onsite' },
-      { visited: true, workMode: 'onsite' },
-      { visited: true, company: 'Acme' },
-      { visited: false, company: 'Acme' },
-      { visited: true, company: 'Nope', workMode: 'remote' }
-    ]) listJobs(db, o)
+    listJobs(db, { visited: false })
+    listJobs(db, { visited: true })
     expect(snapshot()).toEqual(before)
-    expect(listJobs(db, { visited: true, workMode: 'onsite' }).map((j) => j.visitedAt)).toEqual([visited.visitedAt])
-    expect(listJobs(db, { visited: true, workMode: 'hybrid' })).toEqual([])
-    expect(listJobs(db, { visited: false, company: 'Acme' }).map((j) => j.title)).toEqual(['2'])
   })
-  it('a visited job whose work mode changes on refresh moves between filters but stays visited', () => {
-    const id = listJobs(db, { visited: false, company: 'Acme', workMode: 'onsite' })[0].id
+  it('a visited job whose work mode changes on refresh stays visited', () => {
+    const id = listJobs(db, { visited: false }).find((j) => j.title === '1')!.id
     markVisited(db, id)
     upsertJobs(db, [mk('greenhouse:a', '1', 'Acme', 'hybrid', 80)])
-    expect(listJobs(db, { visited: true, workMode: 'hybrid' }).map((j) => j.id)).toEqual([id])
-    expect(listJobs(db, { visited: true, workMode: 'onsite' })).toEqual([])
+    expect(listJobs(db, { visited: true }).map((j) => j.id)).toEqual([id])
+    expect(listJobs(db, { visited: false }).map((j) => j.id)).not.toContain(id)
   })
 })
 
-describe('getCompanyCounts / getStats.bySource', () => {
+describe('getCompanyCounts / getStats', () => {
   it('counts per company over new + visited, null company as ""', () => {
-    markVisited(db, listJobs(db, { visited: false, company: 'Acme' })[0].id)
+    markVisited(db, listJobs(db, { visited: false })[0].id)
     expect(getCompanyCounts(db)).toEqual({ Acme: 2, Beta: 2, Amazon: 1, '': 1 })
-  })
-  it('bySource counts per connector id, new + visited together', () => {
-    markVisited(db, listJobs(db, { visited: false, company: 'Amazon' })[0].id)
-    expect(getStats(db)).toMatchObject({ newCount: 5, visitedCount: 1, bySource: { 'greenhouse:a': 2, 'lever:b': 2, amazon: 2 } })
+    expect(getStats(db)).toMatchObject({ newCount: 5, visitedCount: 1 })
   })
   it('empty DB', () => {
     db.delete(jobs).run()
     expect(getCompanyCounts(db)).toEqual({})
-    expect(getStats(db)).toMatchObject({ newCount: 0, visitedCount: 0, bySource: {}, lastRefreshAt: null })
+    expect(getStats(db)).toMatchObject({ newCount: 0, visitedCount: 0, lastRefreshAt: null })
   })
 })

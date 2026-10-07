@@ -1,47 +1,28 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { IPC } from '../../shared/ipc'
-import { openDb, type Db } from '../db'
+import { memDb } from '../testing/db'
 import { upsertJobs, type ScoredJob } from '../jobs/upsert'
+import { scoredJob } from '../testing/fixtures'
 import { getStats, listJobs } from '../jobs/queries'
 
-const handlers = new Map<string, (...args: unknown[]) => unknown>()
-const openExternal = vi.fn().mockResolvedValue(undefined)
-vi.mock('electron', () => ({
-  ipcMain: { handle: (ch: string, fn: (...a: unknown[]) => unknown) => handlers.set(ch, fn) },
-  shell: { openExternal: (u: string) => openExternal(u) }
-}))
+vi.mock('electron', async () => (await import('../testing/electron')).electronMock())
 
 import { registerJobsIpc } from '../ipc'
+import { handlers, openExternal } from '../testing/electron'
 
-let db: Db
-let close: () => void
+const db = memDb()
 const refresh = vi.fn()
-const row = (id: string, url = 'https://e.com/' + id): ScoredJob => ({
-  source: 'remoteok',
-  externalId: id,
-  title: id,
-  company: 'c',
-  url,
-  description: null,
-  location: null,
-  country: 'IL',
-  city: null,
-  workMode: 'unknown',
-  postedAt: null,
-  score: 50,
-  roles: []
-})
+const row = (id: string, url = 'https://e.com/' + id): ScoredJob =>
+  scoredJob({ source: 'remoteok', externalId: id, title: id, company: 'c', url })
 const call = (ch: string, ...args: unknown[]): unknown => handlers.get(ch)!({}, ...args)
 
 beforeEach(() => {
   handlers.clear()
   openExternal.mockClear()
   refresh.mockReset().mockResolvedValue({ inserted: 0, updated: 0, errors: {}, sources: [] })
-  ;({ db, close } = openDb(':memory:'))
   upsertJobs(db, [row('a'), row('b'), row('js', 'javascript:alert(1)')])
   registerJobsIpc({ db, refresh })
 })
-afterEach(() => close())
 
 describe('registration', () => {
   it('registers exactly the five documented invoke channels (and not the push channel)', () => {

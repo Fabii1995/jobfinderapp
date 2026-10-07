@@ -7,7 +7,7 @@ import { makeCompanyEntry, parseCompanyEntry } from './validate'
 /**
  * Electron-free companies config store: `<dir>/companies.json` (dir = Electron userData, passed in).
  *  - Seeded with the seed list when the file does not exist. The file records `seedsApplied` (seed ids
- *    already offered to this install). On load, seeds not in `seedsApplied` are ADDED (enabled) and recorded;
+ *    already offered to this install). On load, seeds not in `seedsApplied` are ADDED (with the seed's own enabled flag; SQLink is disabled) and recorded;
  *    seeds the user removed stay removed, and existing entries are never modified. Files without
  *    `seedsApplied` (older installs) get LEGACY_SEED_IDS. The extra field is ignored by older readers.
  *  - Writes are tmp-file + rename.
@@ -109,14 +109,6 @@ function loadForWrite(dir: string): { list: CompanyEntry[]; applied: string[] } 
   const { companies, error, seedsApplied } = loadCompanies(dir)
   if (error) throw new Error(error)
   return { list: companies, applied: seedsApplied ?? companies.map((c) => c.id) }
-}
-
-export function listCompanies(dir: string): CompanyEntry[] {
-  return loadCompanies(dir).companies
-}
-
-export function enabledCompanies(dir: string): CompanyEntry[] {
-  return listCompanies(dir).filter((c) => c.enabled)
 }
 
 /** Adds a validated company; throws on invalid input or a duplicate id. Returns the stored entry. */

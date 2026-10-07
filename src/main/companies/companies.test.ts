@@ -7,8 +7,6 @@ import { LEGACY_SEED_IDS, seedCompanies } from './seeds'
 import {
   COMPANIES_FILE,
   addCompany,
-  enabledCompanies,
-  listCompanies,
   loadCompanies,
   removeCompany,
   setCompanyEnabled
@@ -81,7 +79,13 @@ describe('companies store', () => {
     expect(ids).toContain('workday:nvidia')
     expect(ids).toContain('comeet:c5.00d')
     expect(new Set(ids).size).toBe(ids.length)
-    expect(r.companies.every((c) => c.enabled)).toBe(true)
+    // every seed is enabled except SQLink (Cloudflare challenge, off by default)
+    expect(r.companies.length).toBe(37)
+    expect(r.companies.find((c) => c.id === 'sqlink')?.enabled).toBe(false)
+    expect(r.companies.filter((c) => c.enabled).length).toBe(36)
+    expect(r.companies.filter((c) => !c.enabled).map((c) => c.id)).toEqual(['sqlink'])
+    const disk = JSON.parse(readFileSync(join(dir, COMPANIES_FILE), 'utf8')) as { companies: { id: string; enabled: boolean }[] }
+    expect(disk.companies.find((c) => c.id === 'sqlink')?.enabled).toBe(false)
   })
 
   it('never overwrites user edits on a later load', () => {
@@ -90,11 +94,11 @@ describe('companies store', () => {
     removeCompany(dir, 'greenhouse:wizinc')
     setCompanyEnabled(dir, 'amazon', false)
     addCompany(dir, { name: 'Acme', ats: 'lever', params: { slug: 'acme' } })
-    const again = listCompanies(dir)
+    const again = loadCompanies(dir).companies
     expect(again.find((c) => c.id === 'greenhouse:wizinc')).toBeUndefined()
     expect(again.find((c) => c.id === 'amazon')?.enabled).toBe(false)
     expect(again.find((c) => c.id === 'lever:acme')).toBeTruthy()
-    expect(enabledCompanies(dir).find((c) => c.id === 'amazon')).toBeUndefined()
+    expect(again.filter((c) => c.enabled).find((c) => c.id === 'amazon')).toBeUndefined()
   })
 
   it('rejects duplicates and invalid params', () => {
@@ -125,7 +129,7 @@ describe('companies store', () => {
       writeFileSync(file, JSON.stringify({ version: 1, companies }))
       return file
     }
-    const onDisk = (file: string): { companies: { id: string }[]; seedsApplied?: string[] } =>
+    const onDisk = (file: string): { companies: { id: string; enabled?: boolean }[]; seedsApplied?: string[] } =>
       JSON.parse(readFileSync(file, 'utf8'))
 
     it('legacy list is 26 ids, all still in seeds; 11 new', () => {
@@ -151,7 +155,9 @@ describe('companies store', () => {
       expect(ids).not.toContain('greenhouse:wizinc')
       for (const id of newIds()) expect(ids).toContain(id)
       expect(ids.length).toBe(kept.length + 11)
-      expect(r.companies.filter((c) => newIds().includes(c.id)).every((c) => c.enabled)).toBe(true)
+      expect(r.companies.filter((c) => newIds().includes(c.id) && c.id !== 'sqlink').every((c) => c.enabled)).toBe(true)
+      expect(r.companies.find((c) => c.id === 'sqlink')?.enabled).toBe(false)
+      expect(onDisk(file).companies.find((c) => c.id === 'sqlink')?.enabled).toBe(false)
       expect(onDisk(file).seedsApplied?.length).toBe(seedCompanies().length)
     })
 
@@ -159,8 +165,20 @@ describe('companies store', () => {
       const dir = tmp()
       loadCompanies(dir)
       removeCompany(dir, 'sqlink')
-      expect(listCompanies(dir).some((c) => c.id === 'sqlink')).toBe(false)
+      expect(loadCompanies(dir).companies.some((c) => c.id === 'sqlink')).toBe(false)
       expect(onDisk(join(dir, COMPANIES_FILE)).seedsApplied).toContain('sqlink')
+    })
+
+    it('an existing enabled sqlink entry stays enabled through the merge', () => {
+      const dir = tmp()
+      const file = join(dir, COMPANIES_FILE)
+      const on = { ...seedCompanies().find((c) => c.id === 'sqlink')!, enabled: true }
+      // legacy file (no seedsApplied) and a file that already lists sqlink as applied
+      writeFileSync(file, JSON.stringify({ version: 1, companies: [on] }))
+      expect(loadCompanies(dir).companies.find((c) => c.id === 'sqlink')?.enabled).toBe(true)
+      expect(onDisk(file).companies.find((c) => c.id === 'sqlink')?.enabled).toBe(true)
+      writeFileSync(file, JSON.stringify({ version: 1, companies: [on], seedsApplied: ['sqlink'] }))
+      expect(loadCompanies(dir).companies.find((c) => c.id === 'sqlink')?.enabled).toBe(true)
     })
 
     it('preserves edits and non-seed entries while merging', () => {

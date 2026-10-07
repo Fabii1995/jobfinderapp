@@ -1,14 +1,14 @@
 import type { Http } from './types'
 
 export const USER_AGENT = 'JobFinderApp/0.1 (personal job-finder desktop app; keyless public ATS APIs)'
-export const FETCH_TIMEOUT_MS = 20_000
+const FETCH_TIMEOUT_MS = 20_000
 
 /** fetch with ONE retry after a short pause on a network-level failure (connection reset, timeout). HTTP statuses are never retried. */
 async function fetchRetry(url: string, init: RequestInit): Promise<Response> {
   try {
     return await fetch(url, init)
   } catch {
-    await new Promise((r) => setTimeout(r, 400))
+    await sleep(400)
     return fetch(url, { ...init, signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) })
   }
 }
@@ -124,7 +124,7 @@ export function stripHtml(html: string): string {
     // produced (&lt;script&gt;) is removed. Bare "a < b" / "C++ & Java" are left alone.
     .replace(/<\/?[a-z!?][^<>]*>/gi, ' ')
     .replace(/<(?=\/?[a-z!?])/gi, '')
-    .replace(/Â | /g, ' ') // RemoteOK ships mojibake'd nbsp
+    .replace(/Â\u00A0|\u00A0/g, ' ') // NBSP, also as the UTF-8-misdecoded pair (Â + NBSP) that some feeds send
     .replace(/[ \t]+/g, ' ')
     .replace(/ *\n */g, '\n')
     .replace(/\n{3,}/g, '\n\n')
@@ -133,12 +133,6 @@ export function stripHtml(html: string): string {
 
 export function asString(v: unknown): string | null {
   return typeof v === 'string' && v.trim() ? v.trim() : null
-}
-
-/** Epoch seconds -> epoch ms; null if not a finite positive number. */
-export function secondsToMs(v: unknown): number | null {
-  const n = typeof v === 'string' ? Number(v) : v
-  return typeof n === 'number' && Number.isFinite(n) && n > 0 ? Math.round(n * 1000) : null
 }
 
 export type Json = Record<string, unknown>

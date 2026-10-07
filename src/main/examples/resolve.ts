@@ -23,7 +23,7 @@ export type ResolvedFields = Omit<Example, 'label' | 'reason' | 'fetchedAt' | 'n
   extraExperience?: string
 }
 
-export type Resolution =
+type Resolution =
   | { kind: 'resolved'; fields: ResolvedFields }
   /** Nothing was (or may be) fetched: the user must paste the job text. `blocked` = deliberately not fetched. */
   | { kind: 'manual'; reason: string; blocked: boolean }
@@ -260,7 +260,7 @@ export async function resolveUrl(url: string, http: PageHttp): Promise<Resolutio
   }
 }
 
-// ---- experience wording (dev aid; scoring.ts is untouched) ---------------------------------
+// ---- experience wording (dev aid only; read-only use of scoring.ts) -----------------------
 
 const EXPERIENCE_SENTENCE =
   /\d\s*\+?\s*(?:[-–]\s*\d+\s*)?(?:years?|yrs?)|(?:years?|yrs?)\s+of|no (?:prior |previous |relevant )?experience|entry[- ]level|fresh graduate|new grad|junior|שנות ניסיון|שנים|שנת ניסיון|ללא ניסיון|ניסיון/i

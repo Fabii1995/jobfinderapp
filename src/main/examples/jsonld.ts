@@ -2,7 +2,7 @@ import { normalizeLocation } from '../location'
 import { asRecord, asString, dateToMs, stripHtml, type Json } from '../sources/http'
 import type { WorkMode } from '../sources/types'
 
-export interface JsonLdJob {
+interface JsonLdJob {
   title: string
   company: string
   location: string

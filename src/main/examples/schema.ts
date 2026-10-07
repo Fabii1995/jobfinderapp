@@ -7,7 +7,7 @@ import type { WorkMode } from '../sources/types'
  * needsText) exist so the report can reproduce what ingestion would score and filter.
  */
 export type ExampleLabel = 'fit' | 'no-fit'
-export type ExampleVia = 'ats-api' | 'jsonld' | 'manual'
+type ExampleVia = 'ats-api' | 'jsonld' | 'manual'
 
 export interface Example {
   /** `<source>:<externalId>` for ATS postings (same as the app's jobs.source + external_id), else `manual:<hash>`. */
@@ -41,7 +41,7 @@ export interface Example {
 }
 
 export const LABELS: readonly ExampleLabel[] = ['fit', 'no-fit']
-export const VIAS: readonly ExampleVia[] = ['ats-api', 'jsonld', 'manual']
+const VIAS: readonly ExampleVia[] = ['ats-api', 'jsonld', 'manual']
 const WORK_MODES = ['onsite', 'hybrid', 'remote', 'unknown']
 
 /** Returns a list of problems; empty means valid. Never throws. */

@@ -1,14 +1,13 @@
 import { MIN_SCORE } from '../ingest/refresh'
 import { isKeepableLocation, normalizeLocation } from '../location'
+import { classifyRoles } from '../roles'
 import type { Role } from '../../shared/roles'
 import {
   INTERN_SENIORITY_TAGS,
-  INTERN_TITLE_KEYWORDS,
   SENIOR_SENIORITY_TAGS,
-  SENIOR_TITLE_KEYWORDS,
   bodyRequiresExperience,
-  classifyRoles,
-  normalizeTitle,
+  isInternTitle,
+  isSeniorTitle,
   scoreJob,
   titleHasSoftwareRole
 } from '../scoring'
@@ -16,13 +15,7 @@ import type { RawJob } from '../sources/types'
 import { parsedExperience } from './resolve'
 import type { Example } from './schema'
 
-const esc = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-const kwRe = (list: string[]): RegExp =>
-  new RegExp(`(?<![\\p{L}\\p{N}])(?:${list.map(esc).join('|')})(?![\\p{L}\\p{N}])`, 'iu')
-const INTERN_RE = kwRe(INTERN_TITLE_KEYWORDS)
-const SENIOR_RE = kwRe(SENIOR_TITLE_KEYWORDS)
-
-export interface ReportRow {
+interface ReportRow {
   example: Example
   /** null when the entry has no job text yet (not scored). */
   score: number | null
@@ -63,10 +56,9 @@ export function rejectionReasons(job: RawJob, score: number, location: ReportRow
   if (location === 'rejected') {
     reasons.push(`location filter: country=${job.country ?? 'unknown'}, workMode=${job.workMode} (ingest keeps Israel, non-remote)`)
   }
-  const title = normalizeTitle(job.title)
   const tags = (job.seniority ?? []).map((t) => t.toLowerCase())
-  if (SENIOR_RE.test(title)) reasons.push('senior-type title (hard reject, score 0)')
-  if (INTERN_RE.test(title) || tags.some((t) => INTERN_SENIORITY_TAGS.includes(t))) {
+  if (isSeniorTitle(job.title)) reasons.push('senior-type title (hard reject, score 0)')
+  if (isInternTitle(job.title) || tags.some((t) => INTERN_SENIORITY_TAGS.includes(t))) {
     reasons.push('intern/student title or tag (capped at 20; confirmed not junior)')
   }
   if (tags.some((t) => SENIOR_SENIORITY_TAGS.includes(t)) && !tags.includes('entry-level')) {

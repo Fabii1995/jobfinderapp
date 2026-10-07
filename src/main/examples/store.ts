@@ -14,9 +14,9 @@ export function saveExamples(path: string, examples: Example[]): void {
   renameSync(tmp, path)
 }
 
-export type UpsertAction = 'added' | 'updated' | 'unchanged-kept-existing'
+type UpsertAction = 'added' | 'updated' | 'unchanged-kept-existing'
 
-export interface UpsertOptions {
+interface UpsertOptions {
   /** True only when the user passed --label; otherwise an existing entry keeps its label. */
   labelGiven: boolean
   /** True only when the user passed --reason; otherwise an existing entry keeps its reason. */

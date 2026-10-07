@@ -1,33 +1,15 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
 import { sql } from 'drizzle-orm'
-import { openDb, type Db } from '../db'
+import { memDb } from '../testing/db'
 import { jobs } from '../db/schema'
 import { upsertJobs, type ScoredJob } from '../jobs/upsert'
+import { scoredJob } from '../testing/fixtures'
 import { getJobById, getStats, listJobs, markVisited } from '../jobs/queries'
 
-let db: Db
-let close: () => void
-beforeEach(() => {
-  ;({ db, close } = openDb(':memory:'))
-})
-afterEach(() => close())
+const db = memDb()
 
-const job = (externalId: string, o: Partial<ScoredJob> = {}): ScoredJob => ({
-  source: 'remoteok',
-  externalId,
-  title: 't',
-  company: 'c',
-  url: 'https://e.com/x',
-  description: 'd',
-  location: 'l',
-  country: 'IL',
-  city: null,
-  workMode: 'unknown',
-  postedAt: 1,
-  score: 50,
-  roles: [],
-  ...o
-})
+const job = (externalId: string, o: Partial<ScoredJob> = {}): ScoredJob =>
+  scoredJob({ source: 'remoteok', externalId, title: 't', company: 'c', url: 'https://e.com/x', description: 'd', location: 'l', postedAt: 1, ...o })
 
 const tableNames = (): string[] =>
   (
@@ -139,25 +121,18 @@ describe('listJobs / markVisited with hostile inputs', () => {
     expect(getStats(db).visitedCount).toBe(0)
   })
 
-  it('markVisited with a string injection id does not drop tables or mass-update', () => {
-    let r: unknown
-    try {
-      r = markVisited(db, INJECTION as unknown as number)
-    } catch (e) {
-      r = e
+  it('markVisited with string injection ids never drops tables, mass-updates or visits any row', () => {
+    for (const payload of [INJECTION, '1 OR 1=1']) {
+      let r: unknown
+      try {
+        r = markVisited(db, payload as unknown as number)
+      } catch (e) {
+        r = e // throwing is acceptable
+      }
+      expect(r === null || r instanceof Error, payload).toBe(true)
+      expect(tableNames()).toContain('jobs')
+      expect(getStats(db).visitedCount, payload).toBe(0)
     }
-    expect(r === null || r instanceof Error).toBe(true)
-    expect(tableNames()).toContain('jobs')
-    expect(getStats(db).visitedCount).toBe(0)
-  })
-
-  it("markVisited('1 OR 1=1') never visits any row", () => {
-    try {
-      markVisited(db, '1 OR 1=1' as unknown as number)
-    } catch {
-      /* throwing is acceptable */
-    }
-    expect(getStats(db).visitedCount).toBe(0)
   })
 
   it('empty-string externalId/url insert works', () => {

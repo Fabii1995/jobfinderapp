@@ -3,7 +3,7 @@ import { makeCompanyEntry } from '../companies/validate'
 import { scoreJob } from '../scoring'
 import { CONNECTORS, fetchCompany } from './index'
 import { fetchSqlink, parseJobPage, selectCandidates, sqlinkLocation, MAX_DETAIL } from './sqlink'
-import type { Http } from './types'
+import type { ConnectorContext, Http } from './types'
 
 const NOW = Date.parse('2026-10-06T12:00:00Z')
 const DAY = 86_400_000
@@ -51,7 +51,7 @@ describe('selectCandidates (sitemap pre-filter)', () => {
       'מפתחת go לחברה'
     ])
     expect(c[0].url.startsWith('https://www.sqlink.com/career/devops/devops/devops-engineer-1')).toBe(true)
-    expect(c[0].url).not.toMatch(/[^\x00-\x7f]/) // percent-encoded, safe to fetch/open
+    expect([...c[0].url].every((ch) => ch.charCodeAt(0) < 128)).toBe(true) // percent-encoded, safe to fetch/open
   })
 })
 
@@ -106,7 +106,7 @@ describe('fetchSqlink (mocked HTTP, never the network)', () => {
       throw new Error(`HTTP 404 Not Found for ${u}`)
     }
   })
-  const ctx = (http: Http) => ({ id: 'sqlink', name: 'SQLink', http, delayMs: 0 })
+  const ctx = (http: Http): ConnectorContext => ({ id: 'sqlink', name: 'SQLink', http, delayMs: 0 })
 
   it('normalizes jobs; a 404 on one page is skipped; scoring sees Hebrew titles', async () => {
     const calls: string[] = []

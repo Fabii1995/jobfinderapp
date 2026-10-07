@@ -1,11 +1,10 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { openDb, type Db } from '../db'
+import { describe, expect, it, vi } from 'vitest'
+import { memDb } from '../testing/db'
 import { jobs } from '../db/schema'
 import { openJob } from './open'
 import { getJobById } from './queries'
 
-let db: Db
-let close: () => void
+const db = memDb()
 const add = (url: string): number =>
   db
     .insert(jobs)
@@ -13,10 +12,6 @@ const add = (url: string): number =>
     .returning({ id: jobs.id })
     .get().id
 
-beforeEach(() => {
-  ;({ db, close } = openDb(':memory:'))
-})
-afterEach(() => close())
 
 describe('openJob', () => {
   it('opens https and http URLs, then marks visited', async () => {

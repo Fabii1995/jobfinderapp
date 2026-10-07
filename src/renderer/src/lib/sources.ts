@@ -1,6 +1,6 @@
-import type { SourceOutcome } from './types'
+import type { Ats } from './types'
 
-const ATS_NAMES: Record<string, string> = {
+const ATS_NAMES: Record<Ats, string> = {
   greenhouse: 'Greenhouse',
   comeet: 'Comeet',
   lever: 'Lever',
@@ -11,13 +11,8 @@ const ATS_NAMES: Record<string, string> = {
   sqlink: 'SQLink'
 }
 
-export function atsLabel(ats: string): string {
+export function atsLabel(ats: Ats): string {
   return ATS_NAMES[ats] ?? ats
-}
-
-/** Connector ids look like 'greenhouse:wizinc' (or just 'amazon'). */
-export function atsOfSource(source: string): string {
-  return source.split(':')[0]
 }
 
 /**
@@ -31,11 +26,4 @@ export function sourceLabel(source: string, names?: Record<string, string>): str
   const i = source.indexOf(':')
   const ident = i >= 0 ? source.slice(i + 1) : source
   return ident ? ident.charAt(0).toUpperCase() + ident.slice(1) : source
-}
-
-/** id -> company name from the last refresh outcomes (fallback source of names). */
-export function namesFromOutcomes(outcomes: SourceOutcome[] | undefined): Record<string, string> {
-  const out: Record<string, string> = {}
-  for (const o of outcomes ?? []) if (o.name) out[o.source] = o.name
-  return out
 }

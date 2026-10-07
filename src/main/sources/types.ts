@@ -21,7 +21,7 @@ export interface RawJob {
   description: string | null
   /** Free-text location as shown by the source (may list several places). */
   location: string | null
-  /** ISO 3166-1 alpha-2 of the Israel-or-other country the posting is in, else null. 'IL' = Israel. */
+  /** 'IL' when any listed location is in Israel; otherwise the structured ISO 3166-1 alpha-2 country if the source gave one, else null. */
   country: string | null
   city: string | null
   workMode: WorkMode

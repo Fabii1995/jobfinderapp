@@ -1,7 +1,5 @@
 import type { RawJob } from './sources/types'
-
-// Role classification lives in ./roles (pure, also title+description); re-exported for convenience.
-export { classifyRoles, explainRoles } from './roles'
+import { wordMatcher } from './text'
 
 /**
  * Default keyword heuristics for junior/entry-level fit. Pure; no I/O.
@@ -13,7 +11,7 @@ export { classifyRoles, explainRoles } from './roles'
 // ---- keyword lists (lowercase; matched on Unicode letter boundaries) -----------------------
 
 /** Core target roles: QA, backend, Python, AI solutions, FDE. */
-export const STRONG_ROLE_KEYWORDS = [
+const STRONG_ROLE_KEYWORDS = [
   'qa',
   'quality assurance',
   'sdet',
@@ -41,7 +39,7 @@ export const STRONG_ROLE_KEYWORDS = [
 ]
 
 /** Adjacent general software roles. */
-export const GENERAL_ROLE_KEYWORDS = [
+const GENERAL_ROLE_KEYWORDS = [
   'software engineer',
   'software developer',
   'developer',
@@ -93,7 +91,7 @@ const BARE_GENERAL_KEYWORDS = ['software']
  * Title phrases removed before role matching: "developer" here is sales/marketing, not software
  * ("Junior Business Developer" must not read as a software role).
  */
-export const NON_SOFTWARE_TITLE_PHRASES =
+const NON_SOFTWARE_TITLE_PHRASES =
   /(?<![\p{L}\p{N}])(?:business|sales|market|marketing|partner|partnerships|partnership|recruit\w*|content|learning|curriculum|real estate|channel|account|talent)\s+(?:developers?|development)(?![\p{L}\p{N}])/giu
 
 /**
@@ -101,7 +99,7 @@ export const NON_SOFTWARE_TITLE_PHRASES =
  * and "Design Automation" are not software backend/QA. In such titles the generic strong keywords
  * (backend, test engineer, automation engineer, tester) are ignored; python/QA-software still count.
  */
-export const HARDWARE_TITLE_RE =
+const HARDWARE_TITLE_RE =
   /(?<![\p{L}\p{N}])(?:physical design|asic|rtl|vlsi|soc|ic|silicon|analog|mixed[- ]signal|layout|fpga|dft|sta|hardware|rf|post[- ]silicon|pre[- ]silicon|design automation)(?![\p{L}\p{N}])/iu
 const HARDWARE_IGNORED_KEYWORDS =
   /(?<![\p{L}\p{N}])(?:backend|back-end|back end|test engineer|test automation|automation engineer|tester)(?![\p{L}\p{N}])/giu
@@ -143,7 +141,7 @@ export const JUNIOR_TITLE_KEYWORDS = [
 ]
 
 /** "Associate" titles: a moderate junior signal (JUNIOR_TITLE_KEYWORDS carry the full weight). */
-export const ASSOCIATE_TITLE_KEYWORDS = ['associate']
+const ASSOCIATE_TITLE_KEYWORDS = ['associate']
 
 /**
  * Titles that are intern / student roles. They are NOT junior-positive: the score is capped at
@@ -202,7 +200,7 @@ export const SENIOR_TITLE_KEYWORDS = [
 ]
 
 /** Title signals of mid-level (mild penalty). */
-export const MID_TITLE_KEYWORDS = ['engineer ii', 'developer ii', 'mid-level', 'mid level']
+const MID_TITLE_KEYWORDS = ['engineer ii', 'developer ii', 'mid-level', 'mid level']
 
 /** Source seniority tags (lowercase) treated as strong signals. */
 export const ENTRY_SENIORITY_TAGS = ['entry-level']
@@ -212,7 +210,7 @@ export const INTERN_SENIORITY_TAGS = ['intern', 'internship']
 // ---- body (description) experience language ------------------------------------------------
 
 /** Explicit "no experience needed" style language (strong junior signal). */
-export const STRONG_BODY_PATTERNS: RegExp[] = [
+const STRONG_BODY_PATTERNS: RegExp[] = [
   /\bno (?:prior |previous |relevant |professional |work |industry )*experience\b/i,
   /\b(?:0|zero) years?(?: of)? (?:\w+ ){0,2}experience/i,
   /(?<!\bnot (?:an? )?)(?<!\bnon[- ])\bentry[- ]level\b/i,
@@ -292,9 +290,17 @@ const EXPERIENCE_WORDING_RE =
   /(?:\d|\b(?:one|two|three|four|five|six|seven|eight|nine|ten|several|multiple|many|proven|extensive|significant)\b)[^.\n]{0,40}(?:years?|yrs?)[^.\n]{0,40}(?<!\b(?:user|customer|client|developer|candidate|employee|guest|shopper|player|ux|cx|buyer|patient)s?[\s-])experience|years?\s+of\s+(?:\w+\s+){0,4}experience|experience[^.\n]{0,40}\d+\s*\+?\s*(?:years?|yrs?)|(?<![\p{L}\p{N}])(?:שנה|שנתיים|שנות|שנים)(?![\p{L}\p{N}])[^.\n]{0,30}ניסיון|ניסיון[^.\n]{0,40}(?<![\p{L}\p{N}])(?:שנה|שנתיים|שנות|שנים)(?![\p{L}\p{N}])/iu
 
 /** One experience statement found in a description. max=null means open-ended ("3+"). */
-export interface ExperienceStatement {
+interface ExperienceStatement {
   min: number
   max: number | null
+}
+
+/**
+ * True when the description talks about a duration of experience in any shape: a parsed statement
+ * or the looser EXPERIENCE_WORDING_RE. Withholds the no-experience baseline.
+ */
+function bodyStatesExperienceDuration(body: string): boolean {
+  return extractExperience(body).length > 0 || EXPERIENCE_WORDING_RE.test(normalizeExperienceText(body))
 }
 
 /**
@@ -302,10 +308,6 @@ export interface ExperienceStatement {
  * "3 years"), then "up to N", "N+", "at least N", and a bare "N years of ... experience".
  * "5 years ago" and bare tenure statements are not requirements.
  */
-export function bodyStatesExperienceDuration(body: string): boolean {
-  return extractExperience(body).length > 0 || EXPERIENCE_WORDING_RE.test(normalizeExperienceText(body))
-}
-
 export function extractExperience(text: string): ExperienceStatement[] {
   const out: ExperienceStatement[] = []
   let rest = normalizeExperienceText(text)
@@ -336,7 +338,7 @@ export function extractExperience(text: string): ExperienceStatement[] {
 }
 
 /** Junior strength of the description: 'strong' | 'moderate' | 'weak' | null. */
-export type BodyJunior = 'strong' | 'moderate' | 'weak' | null
+type BodyJunior = 'strong' | 'moderate' | 'weak' | null
 
 const RANK: Record<Exclude<BodyJunior, null>, number> = { weak: 1, moderate: 2, strong: 3 }
 
@@ -387,7 +389,7 @@ export function bodyJuniorStrength(body: string): BodyJunior {
 }
 
 /** A stated minimum of >= MIN_YEARS_PENALTY years ("3+", "3-5", "at least 4", "5 years of experience"). */
-export const MIN_YEARS_PENALTY = 3
+const MIN_YEARS_PENALTY = 3
 export function bodyRequiresExperience(body: string): boolean {
   return extractExperience(body).some((s) => s.min >= MIN_YEARS_PENALTY)
 }
@@ -439,35 +441,23 @@ export const INTERN_TITLE_CAP = 20
  * architect, Hebrew בכיר...) are an unconditional hard reject: score 0, checked before any
  * description/tag junior signal. Only the TITLE counts.
  */
-export const SENIOR_TITLE_SCORE = 0
+const SENIOR_TITLE_SCORE = 0
 
 // ---- helpers -------------------------------------------------------------------------------
 
-function escapeRe(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-}
-
-function buildMatcher(words: string[]): RegExp {
-  const alts = [...words].sort((a, b) => b.length - a.length).map(escapeRe)
-  return new RegExp(`(?<![\\p{L}\\p{N}])(?:${alts.join('|')})(?![\\p{L}\\p{N}])`, 'iu')
-}
-
-const STRONG_ROLE_RE = buildMatcher(STRONG_ROLE_KEYWORDS)
-const GENERAL_ROLE_RE = buildMatcher(GENERAL_ROLE_KEYWORDS)
-const GENERAL_ROLE_NONBARE_RE = buildMatcher(GENERAL_ROLE_KEYWORDS.filter((k) => !BARE_GENERAL_KEYWORDS.includes(k)))
-const JUNIOR_TITLE_RE = buildMatcher(JUNIOR_TITLE_KEYWORDS)
-const ASSOCIATE_TITLE_RE = buildMatcher(ASSOCIATE_TITLE_KEYWORDS)
-const INTERN_TITLE_RE = buildMatcher(INTERN_TITLE_KEYWORDS)
-const SENIOR_TITLE_RE = buildMatcher(SENIOR_TITLE_KEYWORDS)
-const MID_TITLE_RE = buildMatcher(MID_TITLE_KEYWORDS)
+const STRONG_ROLE_RE = wordMatcher(STRONG_ROLE_KEYWORDS)
+const GENERAL_ROLE_RE = wordMatcher(GENERAL_ROLE_KEYWORDS)
+const GENERAL_ROLE_NONBARE_RE = wordMatcher(GENERAL_ROLE_KEYWORDS.filter((k) => !BARE_GENERAL_KEYWORDS.includes(k)))
+const JUNIOR_TITLE_RE = wordMatcher(JUNIOR_TITLE_KEYWORDS)
+const ASSOCIATE_TITLE_RE = wordMatcher(ASSOCIATE_TITLE_KEYWORDS)
+const INTERN_TITLE_RE = wordMatcher(INTERN_TITLE_KEYWORDS)
+const SENIOR_TITLE_RE = wordMatcher(SENIOR_TITLE_KEYWORDS)
+const MID_TITLE_RE = wordMatcher(MID_TITLE_KEYWORDS)
 
 /** Bounds regex cost on huge postings; requirements usually sit well inside this. */
 const BODY_CHARS = 12000
 
-/**
- * Hebrew postings write gender as "בודק/ת", "מפתח/ית", "מהנדס/ת", "מפתח(ת)": strip the marker so the
- * phrase keywords ("בודק תוכנה", "מהנדס תוכנה") match.
- */
+/** Hebrew geresh / curly-apostrophe variants that appear between two Hebrew letters. */
 const HE_APOSTROPHE_VARIANTS = /(?<=\p{Script=Hebrew})[׳’‘ʼ′´`](?=\p{Script=Hebrew})/gu
 
 /** Maps geresh / curly apostrophes between Hebrew letters to ASCII ' so ג׳וניור == ג'וניור. */
@@ -475,10 +465,24 @@ function normalizeHebrewApostrophes(text: string): string {
   return text.replace(HE_APOSTROPHE_VARIANTS, "'")
 }
 
+/**
+ * Hebrew postings write gender as "בודק/ת", "מפתח/ית", "מהנדס/ת", "מפתח(ת)": strip the marker so the
+ * phrase keywords ("בודק תוכנה", "מהנדס תוכנה") match.
+ */
 export function normalizeTitle(title: string): string {
   return normalizeHebrewApostrophes(title)
     .replace(/(?<=\p{L})\s*\/\s*(?:ת|ית|ה|ים|ות)(?![\p{L}\p{N}])/gu, '')
     .replace(/(?<=\p{L})\s*\((?:ת|ית|ה)\)/gu, '')
+}
+
+/** True when the (normalized) title names an intern/student role. */
+export function isInternTitle(title: string): boolean {
+  return INTERN_TITLE_RE.test(normalizeTitle(title))
+}
+
+/** True when the (normalized) title carries a seniority keyword (senior, lead, manager, ...). */
+export function isSeniorTitle(title: string): boolean {
+  return SENIOR_TITLE_RE.test(normalizeTitle(title))
 }
 
 /** True for titles scoring can never accept (senior keyword or intern/student): connectors may skip detail fetches. */

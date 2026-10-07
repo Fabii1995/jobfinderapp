@@ -1,7 +1,7 @@
 import { makeCompanyEntry } from './validate'
 import type { CompanyEntry } from './types'
 
-type Seed = [name: string, ats: string, params: Record<string, string>]
+type Seed = [name: string, ats: string, params: Record<string, string>, enabled?: boolean]
 
 const GREENHOUSE: Array<[string, string]> = [
   ['Wiz', 'wizinc'],
@@ -20,7 +20,7 @@ const GREENHOUSE: Array<[string, string]> = [
   ['Forter', 'forter'],
   ['Yotpo', 'yotpo'],
   ['Island', 'island'],
-  // Added in Phase 7b, each verified live (2026-10-06) to list Israel postings.
+  // Each verified live (2026-10-06) to list Israel postings.
   ['Torq', 'torq'],
   ['Apiiro', 'apiiro'],
   ['Cymulate', 'cymulate'],
@@ -42,7 +42,9 @@ const SEEDS: Seed[] = [
   ['Amazon', 'amazon', {}],
   ['Lemonade', 'ashby', { name: 'lemonade' }],
   ['Finout', 'ashby', { name: 'finout' }],
-  ['SQLink', 'sqlink', {}],
+  // OFF by default: sqlink.com answers every automated request (even robots.txt) with a Cloudflare challenge
+  // (HTTP 403). The connector stops on 403 and never bypasses it. Re-enable in the Companies tab if it recovers.
+  ['SQLink', 'sqlink', {}, false],
   ['NVIDIA', 'workday', { host: 'nvidia.wd5.myworkdayjobs.com', tenant: 'nvidia', site: 'NVIDIAExternalCareerSite' }],
   ['Intel', 'workday', { host: 'intel.wd1.myworkdayjobs.com', tenant: 'intel', site: 'External' }],
   ['Salesforce', 'workday', { host: 'salesforce.wd12.myworkdayjobs.com', tenant: 'salesforce', site: 'External_Career_Site' }]
@@ -63,7 +65,7 @@ export const LEGACY_SEED_IDS: readonly string[] = [
   'workday:nvidia', 'workday:intel', 'workday:salesforce'
 ]
 
-/** The first-run company list (all enabled). Built through the same validation as user entries. */
+/** The first-run company list (all enabled except SQLink, see above). Built through the same validation as user entries. */
 export function seedCompanies(): CompanyEntry[] {
-  return SEEDS.map(([name, ats, params]) => makeCompanyEntry({ name, ats, params }))
+  return SEEDS.map(([name, ats, params, enabled]) => makeCompanyEntry({ name, ats, params, enabled }))
 }

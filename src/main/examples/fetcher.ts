@@ -1,9 +1,9 @@
-import { USER_AGENT } from '../sources/http'
+import { USER_AGENT, sleep as defaultSleep } from '../sources/http'
 import type { Http } from '../sources/types'
 import { isBlockedUrl } from './blocked'
 
-export const EXAMPLES_USER_AGENT = USER_AGENT.replace('personal job-finder desktop app', 'personal job-finder dev tool, single-posting lookup')
-export const MAX_REDIRECTS = 4
+const EXAMPLES_USER_AGENT = USER_AGENT.replace('personal job-finder desktop app', 'personal job-finder dev tool, single-posting lookup')
+const MAX_REDIRECTS = 4
 const ROBOTS_TOKEN = 'jobfinderapp'
 
 /** The site refused us or put up a challenge. Never retried, never bypassed. */
@@ -11,7 +11,7 @@ export class BlockedError extends Error {}
 
 const CHALLENGE = /just a moment|cf-chl|captcha|are you a robot|access denied|attention required|px-captcha|verify you are human/i
 
-export type FetchFn = typeof fetch
+type FetchFn = typeof fetch
 
 interface RobotsRule {
   allow: boolean
@@ -67,7 +67,7 @@ export function robotsAllows(rules: RobotsRule[], pathAndQuery: string): boolean
   return best ? best.allow : true
 }
 
-export interface PoliteOptions {
+interface PoliteOptions {
   fetchFn?: FetchFn
   sleep?: (ms: number) => Promise<void>
   /** Minimum gap between requests to the same host. Tests pass 0. */
@@ -75,7 +75,7 @@ export interface PoliteOptions {
   timeoutMs?: number
 }
 
-export interface PoliteHttp extends Http {
+interface PoliteHttp extends Http {
   getText(url: string): Promise<string>
   /** Number of requests actually made (tests assert it stays 0 for blocked sites). */
   readonly requests: number
@@ -91,7 +91,7 @@ export interface PoliteHttp extends Http {
  */
 export function createPoliteHttp(opts: PoliteOptions = {}): PoliteHttp {
   const fetchFn = opts.fetchFn ?? fetch
-  const sleep = opts.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)))
+  const sleep = opts.sleep ?? defaultSleep
   const delayMs = opts.delayMs ?? 1000
   const timeoutMs = opts.timeoutMs ?? 20_000
   const lastHit = new Map<string, number>()

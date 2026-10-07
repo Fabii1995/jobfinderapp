@@ -1,8 +1,6 @@
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowDown, ArrowUp, ChevronsUpDown } from 'lucide-react'
-import { flexRender, type SortingState } from '@tanstack/react-table'
-// v9's v8-compatible hook (keeps familiar column/sort options; see report).
-import { getCoreRowModel, getSortedRowModel, useLegacyTable } from '@tanstack/react-table/legacy'
+import { flexRender, useTable, type SortingState } from '@tanstack/react-table'
 import { TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from '@renderer/components/ui/table'
 import type { Job } from '@renderer/lib/types'
 import { cn } from '@renderer/lib/utils'
@@ -10,7 +8,7 @@ import { useIsCompact } from '@renderer/hooks/useWindowWidth'
 import { useNow } from '@renderer/hooks/useNow'
 import { useOpenJob } from '@renderer/hooks/useOpenJob'
 import { SEARCH_INPUT_ID } from '@renderer/hooks/useAppEvents'
-import { buildColumns, COLUMN_WIDTH, type ColumnId } from './columns'
+import { buildColumns, COLUMN_WIDTH, jobTableFeatures, type ColumnId } from './columns'
 
 interface Props {
   mode: 'new' | 'visited'
@@ -61,7 +59,8 @@ export function JobTable({ mode, jobs }: Props): React.JSX.Element {
 
   const columns = useMemo(() => buildColumns({ compact, now, onOpen }), [compact, now, onOpen])
 
-  const table = useLegacyTable<Job>({
+  const table = useTable({
+    features: jobTableFeatures,
     data: jobs,
     columns,
     state: {
@@ -74,14 +73,14 @@ export function JobTable({ mode, jobs }: Props): React.JSX.Element {
     },
     onSortingChange: setSorting,
     getRowId: (j) => String(j.id),
-    getCoreRowModel: getCoreRowModel(),
-    getSortedRowModel: getSortedRowModel(),
     sortDescFirst: true, // cycle: desc -> asc -> default order
     enableSortingRemoval: true
   })
 
   const rows = table.getRowModel().rows
-  orderRef.current = rows.map((r) => r.original.id)
+  useEffect(() => {
+    orderRef.current = rows.map((r) => r.original.id)
+  }, [rows])
 
   const sortedBy = sorting[0]
   const caption = `${mode === 'new' ? 'New' : 'Visited'} jobs, sorted by ${

@@ -47,7 +47,7 @@ function jobsColumns(sqlite: SqliteDb): string[] {
   return (sqlite.pragma('table_info(jobs)') as Array<{ name: string }>).map((c) => c.name)
 }
 
-/** Remote-only boards removed in Phase 7b; their UNVISITED rows are purged, visited ones kept. */
+/** Remote-only boards removed; their UNVISITED rows are purged, visited ones kept. */
 const REMOVED_SOURCES = ['arbeitnow', 'remoteok', 'himalayas']
 const ADDED_COLUMNS: Array<[string, string]> = [
   ['country', 'TEXT'],
@@ -55,7 +55,7 @@ const ADDED_COLUMNS: Array<[string, string]> = [
   ['work_mode', 'TEXT']
 ]
 
-export interface MigrationReport {
+interface MigrationReport {
   columnsAdded: string[]
   /** Unvisited rows deleted from the removed remote sources. */
   removedUnvisited: number

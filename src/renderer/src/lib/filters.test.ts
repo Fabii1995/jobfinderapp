@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-// Pure renderer logic, tested under plain Node (no DOM). Lives here so the existing vitest include applies.
+// Pure renderer logic, tested under plain Node (no DOM); collected via the vitest include for src/renderer/src.
 import {
   DEFAULT_FILTERS,
   WORK_MODE_OPTIONS,
@@ -7,9 +7,9 @@ import {
   applyFilters,
   sanitizeFilters,
   type Filters
-} from '../renderer/src/lib/filters'
-import { ROLES } from '../shared/roles'
-import type { Job } from '../shared/ipc'
+} from './filters'
+import { ROLES } from '../../../shared/roles'
+import type { Job } from '../../../shared/ipc'
 
 const job = (o: Partial<Job> & { id: number }): Job => ({
   source: 'greenhouse:x',

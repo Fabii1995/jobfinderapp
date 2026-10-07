@@ -1,41 +1,17 @@
-import { mkdtempSync, rmSync } from 'fs'
-import { tmpdir } from 'os'
 import { join } from 'path'
 import Database from 'better-sqlite3'
-import { afterEach, describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { openDb } from './index'
+import { makeOldDb, tempDirs, type OldJobSeed } from '../testing/db'
+import { scoredJob } from '../testing/fixtures'
 import { jobs } from './schema'
-import { upsertJobs, type ScoredJob } from '../jobs/upsert'
+import { upsertJobs } from '../jobs/upsert'
 import { getStats, listJobs } from '../jobs/queries'
 
-const dirs: string[] = []
-afterEach(() => {
-  for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true })
-})
-
-const OLD_COLS = `id INTEGER PRIMARY KEY AUTOINCREMENT, source TEXT NOT NULL, external_id TEXT NOT NULL,
-  title TEXT, company TEXT, url TEXT NOT NULL, description TEXT, location TEXT,
-  posted_at INTEGER, score REAL DEFAULT 0, roles TEXT NOT NULL DEFAULT '[]', first_seen_at INTEGER NOT NULL, visited_at INTEGER`
-
-interface Seed {
-  source: string
-  id: string
-  first: number
-  visited: number | null
-}
-
-function makeOld(rows: Seed[], extraCols = ''): string {
-  const dir = mkdtempSync(join(tmpdir(), 'jf-mig7b-'))
-  dirs.push(dir)
-  const file = join(dir, 'old.db')
-  const s = new Database(file)
-  s.exec(`CREATE TABLE jobs (${OLD_COLS}${extraCols});
-    CREATE UNIQUE INDEX jobs_source_external_id_uq ON jobs (source, external_id);`)
-  const ins = s.prepare('INSERT INTO jobs (source, external_id, title, url, first_seen_at, visited_at) VALUES (?,?,?,?,?,?)')
-  for (const r of rows) ins.run(r.source, r.id, `${r.source}/${r.id}`, `https://e.com/${r.source}/${r.id}`, r.first, r.visited)
-  s.close()
-  return file
-}
+const tempDir = tempDirs()
+const makeOld = (rows: OldJobSeed[], extraCols = ''): string =>
+  makeOldDb(tempDir('jf-mig-'), rows, { withRoles: true, extraCols })
+type Seed = OldJobSeed
 
 const cols = (file: string): string[] => {
   const raw = new Database(file, { readonly: true })
@@ -46,7 +22,7 @@ const cols = (file: string): string[] => {
   }
 }
 
-describe('Phase 7b migration: purge scope', () => {
+describe('migration: purge scope (unvisited non-Israel removed, visited kept)', () => {
   const rows: Seed[] = [
     { source: 'arbeitnow', id: 'u', first: 10, visited: null },
     { source: 'arbeitnow', id: 'v', first: 11, visited: 111 },
@@ -147,15 +123,13 @@ describe('Phase 7b migration: purge scope', () => {
     const e = openDb(empty)
     expect(e.migration).toMatchObject({ removedUnvisited: 0, keptVisited: 0 })
     e.close()
-    const dir = mkdtempSync(join(tmpdir(), 'jf-mig7b-new-'))
-    dirs.push(dir)
-    const fresh = openDb(join(dir, 'new.db'))
+    const fresh = openDb(join(tempDir('jf-mig-new-'), 'new.db'))
     expect(fresh.migration).toEqual({ columnsAdded: [], removedUnvisited: 0, keptVisited: 0 })
     fresh.close()
   })
 })
 
-describe('Phase 7b migration: additive columns', () => {
+describe('migration: additive columns on old schemas', () => {
   it('adds exactly the missing columns on a partial schema (country present, city/work_mode absent)', () => {
     const file = makeOld([{ source: 'amazon', id: '1', first: 5, visited: 55 }], ', country TEXT')
     const raw = new Database(file)
@@ -188,25 +162,13 @@ describe('Phase 7b migration: additive columns', () => {
     try {
       const [r] = listJobs(db, { visited: false })
       expect(r).toMatchObject({ country: null, city: null, workMode: null })
-      // an 'unknown' work-mode filter also matches NULL work_mode rows (renderer treats null as unknown)
-      expect(listJobs(db, { visited: false, workMode: 'unknown' }).map((j) => j.id)).toEqual([r.id])
-      expect(listJobs(db, { visited: false, workMode: 'onsite' })).toEqual([])
     } finally {
       close()
     }
   })
 
   it('missing roles column AND missing 7b columns together (oldest schema) migrate in one open', () => {
-    const dir = mkdtempSync(join(tmpdir(), 'jf-mig7b-oldest-'))
-    dirs.push(dir)
-    const file = join(dir, 'o.db')
-    const s = new Database(file)
-    s.exec(`CREATE TABLE jobs (id INTEGER PRIMARY KEY AUTOINCREMENT, source TEXT NOT NULL, external_id TEXT NOT NULL,
-      title TEXT, company TEXT, url TEXT NOT NULL, description TEXT, location TEXT, posted_at INTEGER, score REAL DEFAULT 0,
-      first_seen_at INTEGER NOT NULL, visited_at INTEGER);
-      CREATE UNIQUE INDEX jobs_source_external_id_uq ON jobs (source, external_id);
-      INSERT INTO jobs (source, external_id, url, first_seen_at, visited_at) VALUES ('amazon','1','https://e.com/1',7,77);`)
-    s.close()
+    const file = makeOldDb(tempDir('jf-mig-oldest-'), [{ source: 'amazon', id: '1', first: 7, visited: 77 }]) // no roles column
     const { db, close, migration } = openDb(file)
     try {
       expect(migration.columnsAdded).toEqual(['country', 'city', 'work_mode'])
@@ -218,7 +180,7 @@ describe('Phase 7b migration: additive columns', () => {
 })
 
 describe('upsert of a visited Israel job with changed workMode/city (file-backed)', () => {
-  const base: ScoredJob = {
+  const base = scoredJob({
     source: 'greenhouse:acme',
     externalId: '42',
     title: 'QA Engineer',
@@ -226,18 +188,13 @@ describe('upsert of a visited Israel job with changed workMode/city (file-backed
     url: 'https://e.com/42',
     description: 'd',
     location: 'Tel Aviv',
-    country: 'IL',
     city: 'Tel Aviv',
     workMode: 'onsite',
-    postedAt: null,
-    score: 60,
-    roles: []
-  }
+    score: 60
+  })
 
   it('updates workMode/city/country but keeps visitedAt and firstSeenAt, across a reopen', () => {
-    const dir = mkdtempSync(join(tmpdir(), 'jf-mig7b-up-'))
-    dirs.push(dir)
-    const file = join(dir, 'a.db')
+    const file = join(tempDir('jf-mig-up-'), 'a.db')
     const a = openDb(file)
     upsertJobs(a.db, [base])
     const id = a.db.select().from(jobs).get()!.id
@@ -260,7 +217,7 @@ describe('upsert of a visited Israel job with changed workMode/city (file-backed
     }
   })
 
-  it('upserting an old pre-7b visited row (null country/work_mode) fills the new columns and keeps visitedAt', () => {
+  it('upserting an old pre-country/workMode visited row (null country/work_mode) fills the new columns and keeps visitedAt', () => {
     const file = makeOld([{ source: 'greenhouse:acme', id: '42', first: 5, visited: 500 }])
     const { db, close } = openDb(file)
     try {

@@ -28,7 +28,6 @@ export const jobs = sqliteTable(
 )
 
 export type Job = typeof jobs.$inferSelect
-export type NewJob = typeof jobs.$inferInsert
 
 /** Small key/value store (e.g. the last refresh summary). Created idempotently in db/index.ts. */
 export const meta = sqliteTable('meta', {

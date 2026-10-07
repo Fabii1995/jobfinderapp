@@ -14,12 +14,7 @@ export const ROLES = [
 
 export type Role = (typeof ROLES)[number]['slug']
 
-export const ROLE_LABELS: Record<Role, string> = {
-  qa: 'QA',
-  backend: 'Backend',
-  python: 'Python',
-  ai: 'AI / ML',
-  'forward-deployed': 'Forward Deployed',
-  frontend: 'Frontend',
-  fullstack: 'Full-stack'
-}
+export const ROLE_LABELS = Object.fromEntries(ROLES.map((r) => [r.slug, r.label])) as Record<
+  Role,
+  string
+>

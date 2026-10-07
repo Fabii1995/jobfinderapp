@@ -1,24 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { scoreJob } from './scoring'
 import { MIN_SCORE } from './ingest/refresh'
-import type { RawJob } from './sources/types'
+import { WEIGHTS } from './scoring'
+import { scoreTitle } from './testing/fixtures'
 
-const raw = (title: string, description: string | null = null, extra: Partial<RawJob> = {}): RawJob => ({
-  source: 'greenhouse:x',
-  externalId: 'x',
-  title,
-  company: 'Co',
-  url: 'https://example.com',
-  description,
-  location: null,
-  country: 'IL',
-  city: null,
-  workMode: 'unknown',
-  postedAt: null,
-  ...extra
-})
-const s = (title: string, description: string | null = null, extra: Partial<RawJob> = {}): number =>
-  scoreJob(raw(title, description, extra))
+const s = scoreTitle
 
 /** One regression row. Bounds are inclusive and deliberately loose: they pin the user's RULE, not an exact weight. */
 interface Row {
@@ -142,6 +127,26 @@ const ROWS: Row[] = [
   { rule: 'Junior Marketing Manager', title: 'Junior Marketing Manager', min: 0, max: MIN_SCORE - 1 },
   { rule: 'Customer Support Specialist + no experience', title: 'Customer Support Specialist', desc: 'no experience required', min: 0, max: MIN_SCORE - 1 },
 
+  // --- folded in from the former scoring.test.ts (unique cases only)
+  { rule: 'SENIOR in upper case', title: 'SENIOR qa engineer', min: 0, max: 0 },
+  { rule: 'Sr QA without a dot', title: 'Sr QA Engineer', min: 0, max: 0 },
+  { rule: 'Hebrew senior developer', title: 'מפתח בכיר', min: 0, max: 0 },
+  { rule: 'Lead Python Developer', title: 'Lead Python Developer', min: 0, max: 0 },
+  { rule: 'Principal QA Engineer', title: 'Principal QA Engineer', min: 0, max: 0 },
+  { rule: 'Senior Director with 10+ years and a senior tag', title: 'Senior Director', desc: '10+ years', tags: ['Senior'], min: 0, max: 0 },
+  { rule: 'empty title scores 0', title: '', min: 0, max: 0 },
+  { rule: 'score clamps at 100', title: 'Junior QA Engineer', desc: 'entry-level, 0-2 years', tags: ['Entry-level'], min: 100, max: 100 },
+  { rule: 'Junior QA Engineer passes MIN_SCORE', title: 'Junior QA Engineer', min: MIN_SCORE, max: 100 },
+  { rule: 'Entry Level Backend Developer passes MIN_SCORE', title: 'Entry Level Backend Developer', min: MIN_SCORE, max: 100 },
+  { rule: 'New College Graduate passes MIN_SCORE', title: 'New College Graduate, Software Engineer', min: MIN_SCORE, max: 100 },
+  { rule: 'SDE titles count as general software roles', title: '2026 Graduate Software Dev Engineer', min: MIN_SCORE, max: 100 },
+  { rule: 'Software QA Engineer gets exactly the no-experience baseline', title: 'Software QA Engineer', min: MIN_SCORE + WEIGHTS.noExperienceBaseline, max: MIN_SCORE + WEIGHTS.noExperienceBaseline },
+  { rule: 'Software Engineering Internship', title: 'Software Engineering Internship', desc: 'entry level, 0-2 years', min: 0, max: MIN_SCORE - 1 },
+  { rule: 'Werkstudent', title: 'Werkstudent Backend', desc: 'entry level, 0-2 years', min: 0, max: MIN_SCORE - 1 },
+  { rule: 'Junior QA Student', title: 'Junior QA Student', desc: 'entry level, 0-2 years', min: 0, max: MIN_SCORE - 1 },
+  { rule: 'Penetration Tester is not software QA', title: 'Penetration Tester & Security Researcher', min: 0, max: MIN_SCORE - 1 },
+  { rule: 'Junior Business Development Representative is sales', title: 'Junior Business Development Representative', min: 0, max: MIN_SCORE - 1 },
+
   // --- mid-level
   { rule: 'Engineer II', title: 'Software Engineer II', min: 0, max: MIN_SCORE - 1 },
   { rule: 'Mid-Level Python Developer', title: 'Mid-Level Python Developer', min: 0, max: MIN_SCORE - 1 }
@@ -160,6 +165,9 @@ describe('scoring regression table (user rules)', () => {
 })
 
 describe('scoring: relational rules', () => {
+  it('"Up to 2 years" in the body scores strictly above the same title with no experience language', () => {
+    expect(s('Backend Developer', 'Up to 2 years experience')).toBeGreaterThan(s('Backend Developer', 'Great team'))
+  })
   const BASE = 'Software Engineer'
   it('a senior title stays 0 for every body/tag combination', () => {
     for (const d of [null, '', 'no experience required', '0-2 years', 'entry level new grad', '1+ years', 'junior position']) {
@@ -214,10 +222,8 @@ describe('scoring: relational rules', () => {
 })
 
 describe('scoring: Hebrew apostrophe variants (regression)', () => {
-  // src/main/scoring.ts JUNIOR_TITLE_KEYWORDS only has the ASCII apostrophe form "ג'וניור". Hebrew text
-  // normally uses the geresh U+05F3 (ג׳וניור) or a curly apostrophe U+2019. normalizeTitle does not map
-  // them, so a clearly junior Hebrew title scores like an unmarked one (40, the no-experience baseline
-  // for a QA title) instead of the junior weight (>= 60).
+  // Regression: Hebrew text normally uses the geresh U+05F3 (ג׳וניור) or a curly apostrophe U+2019, not the
+  // ASCII apostrophe; these must score as junior (>= 60), not like an unmarked title.
   it('Hebrew junior with geresh U+05F3 is recognised as junior (title)', () => {
     expect(s('בודק תוכנה ג׳וניור')).toBeGreaterThanOrEqual(60)
   })

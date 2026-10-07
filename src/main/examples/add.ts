@@ -5,7 +5,7 @@ import { experienceText, resolveUrl, type ResolvedFields } from './resolve'
 import { LABELS, manualId, validateExample, type Example, type ExampleLabel } from './schema'
 import { loadExamples, saveExamples, upsertExample } from './store'
 
-export interface AddArgs {
+interface AddArgs {
   inputs: string[]
   label: ExampleLabel
   labelGiven: boolean
@@ -76,7 +76,7 @@ export interface AddDeps {
   log?: (line: string) => void
 }
 
-export interface AddResult {
+interface AddResult {
   lines: string[]
   /** URLs/ids that still need the user to paste job text. */
   needText: string[]

@@ -4,17 +4,7 @@ Owned by the Orchestrator agent. Update status here as work lands — this is th
 
 ## Stack
 
-Standalone Electron desktop dashboard (replaces the old Next.js/Prisma stack).
-
-- Shell: Electron, scaffolded with electron-vite (react-ts template)
-- UI: Vite + React + TypeScript + Tailwind, shadcn/ui components
-- Server state: TanStack Query (wraps IPC calls); tables: TanStack Table
-- UI state: Zustand (tab, filters, search; filters persisted)
-- Main/UI bridge: typed IPC via contextBridge preload (`jobs:list`, `jobs:refresh`, `jobs:visit`)
-- DB: better-sqlite3 + Drizzle ORM (electron-rebuild for the native module), file in Electron `userData`
-- Scheduler: node-cron in the main process (3h)
-- Tests: Vitest (unit) + Playwright-Electron (e2e)
-- Packaging: electron-builder (Windows installer)
+Standalone Electron desktop dashboard. Stack, layout and commands: see `AGENTS.md`. Hard rules: `RULES.md`.
 
 ## Phase 0 — Reset docs
 
@@ -84,9 +74,9 @@ Standalone Electron desktop dashboard (replaces the old Next.js/Prisma stack).
 
 ## Phase 7b — Israel-focused sources
 
-New user requirement (this session). Status: all items 1-8 DONE (see items). Checkboxes are ticked only for what was verified; see "Phase 7b open / unverified" below.
+New user requirement (2026-10-07). Status: all items 1-8 DONE (see items). Checkboxes are ticked only for what was verified; see "Phase 7b open / unverified" below.
 
-Decisions (user, this session):
+Decisions (user, 2026-10-07):
 - New-grad / graduate-program roles COUNT as junior.
 - Student and intern roles do NOT count as junior. CONFIRMED by the user (2026-10-07); no longer an assumption.
 - "Associate" titles are a moderate junior signal.
@@ -103,10 +93,10 @@ Requirements:
 
 Items:
 - [x] (1) (job-search) Feasibility research with live counts per ATS/board. Outcome: HireMeTech NOT built (robots.txt Disallow /api/, job data only reachable via /api, client-rendered, terms unreadable). Workable not implemented. Hebrew boards (AllJobs/Drushim/JobMaster) not built.
-- [x] (2) (job-search) Backend: schema migration (country/city/work_mode; purges only UNVISITED rows of the removed remote sources; `visitedAt` untouched; idempotent) and `RawJob` update. Migration test 7b passes.
-- [x] (3) (job-search) Backend connectors in `src/main/sources/`: Amazon, Workday (NVIDIA/Intel/Salesforce), Greenhouse, Comeet, Lever, SmartRecruiters, Ashby, SQLink. Editable company list in userData; seed list now 37 (26 original + 11 new: SQLink, Torq, Apiiro, Cymulate, Salt Security, Orca, BigID, Optimove, Innovid, Lemonade, Finout) with an additive seed merge (`seedsApplied`) so existing installs get new seeds without resurrecting removed ones or overwriting edits. SQLink is ON per the user; robots allow it but its terms page could not be located/read: KNOWN RISK, one-click disable in the Companies tab.
+- [x] (2) (job-search) Backend: schema migration (country/city/work_mode; purges only UNVISITED rows of the removed remote sources, explicitly approved here for that one migration; `visitedAt` untouched; idempotent) and `RawJob` update. Migration test 7b passes.
+- [x] (3) (job-search) Backend connectors in `src/main/sources/`: Amazon, Workday (NVIDIA/Intel/Salesforce), Greenhouse, Comeet, Lever, SmartRecruiters, Ashby, SQLink. Editable company list in userData; seed list now 37 (26 original + 11 new: SQLink, Torq, Apiiro, Cymulate, Salt Security, Orca, BigID, Optimove, Innovid, Lemonade, Finout) with an additive seed merge (`seedsApplied`) so existing installs get new seeds without resurrecting removed ones or overwriting edits. SQLink was ON per the user at the time (its terms page could not be located/read: KNOWN RISK); it is now seeded OFF by default because Cloudflare blocks automated requests with 403 (see Phase 7b open, RESOLVED SQLink 403).
 - [x] (4) (job-search) Israel-only location filter (remote-only excluded, no bare "IL") and scoring/roles update: senior etc. in title = 0; new grad/Associate count; 1+ years counts; 2+ neutral; no-experience-stated software title ~30-40; 3+ penalty; student/intern capped; Hebrew support incl. apostrophe variants; firmware/embedded keywords.
-- [x] (5) (job-search) Removed Arbeitnow, RemoteOK, Himalayas (sources and tests). Docs references: see Notes (Phase 9 still owns CLAUDE.md/README.md).
+- [x] (5) (job-search) Removed Arbeitnow, RemoteOK, Himalayas (sources and tests). Docs references cleaned up in the Phase 9a doc pass.
 - [x] (6) (frontend) IPC for new data; work-mode and company filters; Companies tab with paste-URL add + enable/remove; per-company failure summary; empty state. Verified in the built app by frontend (live add of Stripe; bad URLs rejected).
 - [x] (7) (test) New tests: companiesIpc, ipc filters, queries filters, migration 7b, renderer filters, scoring table (~95 cases), connectors with mocked HTTP. 3 bugs found and FIXED (malformed percent-escape URLs threw; Hebrew geresh/curly-apostrophe junior; NULL work_mode vs 'unknown' filter). Main session ran `npx vitest run`: 23 files, 571 passed + 4 expected-fail (before the last fix); after it job-search reported 575 passing, 0 failing, no `it.fails` left; typecheck clean.
 - [x] (8) (frontend/test) Rebuild installer and re-verify. DONE. Frontend rebuilt `release\job-finder-1.0.0-setup.exe` (103,141,255 bytes, ~98.4 MiB, unsigned). Asar contents verified (no tests/e2e/scripts; better-sqlite3 unpacked). Unpacked packaged app verified with isolated userData: packaged, menu null, sandbox on, 37 seeds, legacy-upgrade merge, live refresh x2 (21 kept, 0 duplicates, visitedAt preserved across refresh and relaunch). The user separately installed the NSIS installer and reported it works (high level only, see Phase 7).
@@ -119,8 +109,8 @@ Phase 7b open / unverified:
 - A real Refresh via the UI across all companies has not been run; Comeet add not verified live.
 - Workable not implemented; HireMeTech not built (reasons in item 1); Hebrew boards not built.
 - Connector fixtures follow connector docs and were never validated against real captured payloads; no concurrent-refresh test.
-- Stale comment in `companiesIpc.test.ts` ("BUG ... it.fails", title suffix) needs cleanup.
-- Dev-only scripts `scripts/live-run.ts` and `scripts/probe-companies.ts` exist (user may delete).
+- (Resolved in Phase 9a: the stale `companiesIpc.test.ts` comment was cleaned up and `scripts/live-run.ts` / `scripts/probe-companies.ts` were deleted.)
+- **RESOLVED (2026-10-07): SQLink 403.** A live refresh in the packaged app returned `sqlink: HTTP 403 Forbidden for https://www.sqlink.com/sitemap/` and kept 14 jobs (not ~21). Diagnosis (main session, one polite request): sqlink.com answers every automated request, including robots.txt, with HTTP 403 and `Cf-Mitigated: challenge` (a Cloudflare browser challenge). The connector correctly stops on 403 and must NOT bypass it (RULES.md). SQLink earlier produced 8 kept jobs and now yields none while blocked. DECISION (user): SQLink is seeded DISABLED by default (`src/main/companies/seeds.ts`, 4th tuple element `false`); the user can re-enable it in the Companies tab. Existing installs keep their current on/off choice (the user's installed copy likely has it enabled and must untick it manually until a rebuilt installer); fresh installs have 36 of 37 seeds enabled. Verified by the main session: `npm run typecheck` clean, `npx vitest run` 25 files / 594 tests passing. The installer has NOT been rebuilt with this default yet.
 - Removing a company leaves its jobs in the DB (by design, noted in the UI).
 - Phase 8 relevance tuning waits on the user's good-job examples (see Phase 8); the intake tooling is built (see Phase 8).
 
@@ -154,24 +144,25 @@ Rejected options (assessments from general knowledge, NOT tested):
 - [x] (job-search) Build the intake tools `examples:add` and `examples:report` (see above) — built; main session verified 24 files / 601 tests pass, typecheck clean; live vs unit-test-only coverage listed above
 - [ ] User provides good-job examples (job ids / page URLs; pasted text for blocked sites, with their own labels and reasons) — WAITING on the user
 - [ ] (job-search) Update `scoring.ts` and the `job-relevance-scoring` skill to match the examples
-- [ ] (job-search) Check QA/FDE coverage; if thin, offer Adzuna (key in `.env.local`/userData config, user-provided)
+- [ ] (job-search) Check QA/FDE coverage; if thin, offer Adzuna (user-provided key in the userData config only, never in the repo)
 
 ## Phase 9a — Final cleanup pass (code + rules)
 
 Behavior-preserving only. Runs after Phase 8 relevance tuning if that happens (see Notes), and BEFORE Phase 9 so docs are reconciled last. Method: use tooling to find candidates (knip or ts-prune, depcheck, `tsc --noUnusedLocals --noUnusedParameters`, eslint no-unused-vars), then review each candidate by hand. The user reviews the list of deletions before anything non-trivial is removed.
 
-- [ ] (job-search) Dead/redundant code in its lane `src/main/{sources,scoring,roles,location,companies,ingest,scheduler}`: unused exports, functions, constants, imports, duplicate helpers (e.g. overlapping normalization/regex/decode helpers across `http.ts`, `scoring.ts`, `location.ts`, connectors), leftover remote-source remnants, unused params/types
-- [ ] (frontend) Same for `src/main/{index,ipc,companiesIpc,db,jobs}`, `src/preload`, `src/shared`, `src/renderer/src`: unused shadcn components/files/hooks/lib exports/types, duplicated logic, deprecated `useLegacyTable` migration, any leftover `cn` dependency or `from "cn"` imports, unused deps in package.json/devDependencies (e.g. `@electron-toolkit/preload`), unused assets, stale comments
-- [ ] (test) Redundant/duplicate tests, stale comments (e.g. the stale "BUG ... it.fails" note in `companiesIpc.test.ts`), orphaned fixtures, unused e2e/test config; tests must still prove every invariant
-- [ ] (orchestrator) Rules and project docs redundancy/contradictions: `RULES.md`, `AGENTS.md`, `CLAUDE.md`, `README.md`, `.claude/agents/*.md`, `.claude/skills/*/SKILL.md`, `docs/dashboard-spec.md` (outdated lines), stale PLAN.md notes. One source of truth per fact; remove duplication and contradictions; KEEP every hard rule (visitedAt invariant, delegation rule, lane rules, Electron-free DB layer, sandbox/contextIsolation, sources/secrets rules)
-- [ ] (job-search) Dev scripts: decide keep or delete `scripts/live-run.ts` and `scripts/probe-companies.ts` (user decides; default delete unless documented in AGENTS.md as dev tools). Decision must also consider `scripts/examples-add.ts` and `scripts/examples-report.ts`: default KEEP, documented in AGENTS.md as dev tools (they back `npm run examples:*`, thin wrappers over `src/main/examples/`).
-- [ ] (test) Gate, all must pass after the cleanup: `npm run typecheck`, `npx vitest run` (all green, visitedAt tests intact), `npm run build`, `npx playwright test`, and a final `npm run dist` smoke test of the unpacked app. No behavior changes, no weakening of tests or rules.
+Status: code cleanup APPLIED 2026-10-07. Main-session verification (re-ran): `npm run typecheck` (node+web+e2e) clean; `npx vitest run` 25 files / 592 tests passing; `npm run build` ok. `git diff` vs snapshot commit 3208d9a: 85 files changed (+617/-1942); new untracked: `e2e/table-sorting.{spec.ts,golden.json}`, `src/main/{text.ts,testing/,hardening/http-client.test.ts,ingest/refresh.test.ts,sources/http.test.ts}`, `tsconfig.e2e.json`. Agent-reported only (frontend; NOT re-run by the main session): `npx playwright test` 2/2 pass, `npm run dist` ok, installer 103,141,255 -> 87,023,238 bytes, unpacked smoke test passed (packaged, menu null, sandbox on, 37 seeds, refresh twice with no duplicates, visitedAt preserved across refresh and relaunch).
+
+- [x] (job-search) Dead/redundant code in its lane `src/main/{sources,scoring,roles,location,companies,ingest,scheduler}`. Done: shared `src/main/text.ts` matcher; deleted `secondsToMs`, a re-export, `listCompanies`, `enabledCompanies`; unexported internals. Skipped D7 (reusing the `amazon.ts` country-code check) on purpose, because `isIsraelCountryCode` is broader. Verified via the main-session typecheck/vitest/build above.
+- [x] (frontend) Same for `src/main/{index,ipc,companiesIpc,db,jobs}`, `src/preload`, `src/shared`, `src/renderer/src`. Done: removed deps `@radix-ui/react-slot`, `react-tabs`, `@electron-toolkit/preload`, `@types/node-cron`, `drizzle-kit` (+ `drizzle.config.ts`); deleted `separator.tsx`, `useCompanyNames`, `atsOfSource` and unused mac/duplicate icons; removed server-side workMode/company list filters and `JobStats.bySource` (the renderer filters client-side); de-exports; `Ats`/`ROLE_LABELS` dedupe; `useLegacyTable` migrated to `useTable` with a byte-identical sort-behavior golden (`e2e/table-sorting.spec.ts` + golden json, added by frontend; the test agent should review/adopt). Installer trimmed: better-sqlite3 deps/src/build and non-win32-x64 prebuilds excluded, `electronLanguages` en-US, d.ts/md excluded in node_modules. Typecheck/vitest/build verified by the main session; Playwright, dist and installer size agent-reported (see Status). Remaining lint: `react-hooks/refs` error at `JobTable.tsx` ~62 left as a false positive.
+- [x] (test) Redundant/duplicate tests, stale comments, orphaned fixtures, e2e/test config. Done: stale comments fixed (incl. the `companiesIpc.test.ts` "BUG ... it.fails" note); ~10 duplicate tests merged with surviving tests named; shared helpers in `src/main/testing` (memDb, tempDirs, makeOldDb, rawJob, scoredJob, electron mock); renderer-filters test moved to `src/renderer/src/lib/filters.test.ts`; `tsconfig.e2e.json` + `typecheck:e2e` added (test agent edited `package.json` outside its lane, UNAPPROVED; see Notes); two loosened scoring rows re-pinned exactly after the main session objected. Verified by the main session (vitest/typecheck).
+- [x] (orchestrator) DONE 2026-10-07 (user-approved, applied; docs reflect the post-cleanup state the code agents are producing, not yet re-verified against the final code). Rules and project docs redundancy/contradictions: `RULES.md`, `AGENTS.md`, `CLAUDE.md`, `README.md`, `.claude/agents/*.md`, `.claude/skills/*/SKILL.md`, `docs/dashboard-spec.md` (outdated lines), stale PLAN.md notes. One source of truth per fact; remove duplication and contradictions; KEEP every hard rule (visitedAt invariant, delegation rule, lane rules, Electron-free DB layer, sandbox/contextIsolation, sources/secrets rules)
+- [x] (job-search) Dev scripts: deleted `scripts/live-run.ts` and `scripts/probe-companies.ts`; KEPT `scripts/examples-add.ts` and `scripts/examples-report.ts` (back `npm run examples:*`).
+- [x] (main session / test) Gate: `npm run typecheck`, `npx vitest run` (592 passing) and `npm run build` re-run and verified by the main session. `npx playwright test` 2/2, `npm run dist` and the unpacked smoke test are agent-reported by frontend, not re-run by the main session.
 
 ## Phase 9 — Docs
 
-- [ ] (orchestrator) Final pass: reconcile every PLAN.md checkbox with what actually landed
-- [ ] (orchestrator) Update README and CLAUDE.md (stack, layout, conventions; drop Next.js `await params`/Prisma notes)
-- [ ] (orchestrator) Update RULES.md lane paths and agent files to `src/main`, `src/renderer`, `src/preload`
+- [ ] (orchestrator) Final pass: reconcile every PLAN.md checkbox with what actually landed (verified vs agent-reported)
+- [ ] (orchestrator) Re-check README, CLAUDE.md, AGENTS.md, RULES.md and the agent files against the final code (the Phase 9a doc pass already rewrote them for the Electron stack)
 
 ## Notes
 
@@ -179,35 +170,26 @@ Behavior-preserving only. Runs after Phase 8 relevance tuning if that happens (s
 - **Delegation rule:** if delegation fails, STOP and tell the user. Do not do the work directly or return a workaround plan.
 - No `/design` skill exists; the ui-ux agent specs the design first (Phase 4), then frontend implements.
 - Phase 8 is waiting on user-provided examples (job ids / URLs); intake tooling (`examples:add`, `examples:report`) is built and verified (see Phase 8).
-- Himalayas's `?seniority=` query param does not reliably filter server-side — filtering happens client-side on the `seniority` array field plus title keywords. Don't re-add server-side trust in that param without re-verifying.
-- RemoteOK's `/api` response has a legal-notice object as the first array element — always filter by presence of `id` before mapping.
-- **Phase 1 verified:** files exist (AGENTS.md, .gitignore, shadcn button/card/tabs/badge/skeleton/table, Zustand store `src/renderer/src/store/ui.ts`, `electron-builder.yml`), deps installed (TanStack Query/Table, Zustand, Drizzle, better-sqlite3, node-cron, Tailwind v4), `npm run typecheck` passes. Frontend also reported `npm run build`, `npm run rebuild` (better-sqlite3 vs Electron) passed, and `npm run dev` started with no errors.
-- **Phase 1 NOT verified:** the Electron window was never seen rendering; `npm run dist` / ASAR unpack of better-sqlite3 untested (revisit in Phase 7); better-sqlite3 not yet loaded inside Electron (no DB code until Phase 2).
-- **Phase 6 constraint:** better-sqlite3 is built for Electron's ABI but Vitest runs under plain Node, so tests touching the native module need an injectable DB layer or a Node-ABI build. Design the Phase 2 DB layer so the upsert is testable.
-- `src/main/index.ts` and `src/preload` are still stock electron-vite demo code (incl. a `ping` IPC) until Phase 2.
-- **Phase 2 UNTESTED:** the real behavior of `visitedAt` surviving a refresh, the transaction, inserted/updated counts, `listJobs` ordering (NULLS LAST) and the `getStats` SQL are all untested, because better-sqlite3 is built for Electron's ABI and Vitest runs under plain Node. Phase 6 must solve this (Node-ABI build or an alternative) before the invariant test can run. Also note: the upsert uses a `tx as unknown as Db` cast, and `sandbox: false` is still set in the BrowserWindow from the stock template (review in Phase 7).
 - `npm audit` reports vulnerabilities, unaddressed.
-- README.md and CLAUDE.md are still stale until Phase 9.
-- **Phase 3 verified (main thread):** typecheck passes; grep confirms no `visitedAt` write outside `queries.ts` `markVisited` / the safe upsert; `src/main/index.ts` is wired to `refreshJobs` + `startScheduler`. job-search fetched all three sources LIVE with no failures (Arbeitnow 731, RemoteOK 99, Himalayas 113 jobs); 72 of 943 kept at `MIN_SCORE` 30 (~8%).
-- **Live-API findings:** Arbeitnow ~300/page, capped at 3 pages. RemoteOK `[0]` legal notice confirmed; descriptions have mojibake cleaned by `stripHtml`; terms ask for a link-back. Himalayas uses cursor pagination (`?cursor=`), limit capped at 20, `?seniority=` confirmed ignored server-side, plus a `/jobs/api/search?q=` endpoint; the client does 5 feed pages + 8 targeted searches, deduping by guid.
-- **Scoring caveat:** unlabeled generic "Backend Engineer"/"QA Engineer" score exactly 30 (pass at threshold) and some German Werkstudent IT roles score 60. Tighten in Phase 8 once the user labels examples.
-- **Lane exception:** job-search made a narrow, user-sanctioned edit to `src/main/index.ts` (refresh wiring + scheduler start/stop), added `errors` to `RefreshResponse` in `src/shared/ipc.ts`, and added optional `seniority?` on `RawJob`.
-- **Phase 3 NOT verified:** `refreshJobs` never run against a DB or inside Electron; scheduler tick untested; no renderer reads `errors`; a request failing mid-pagination is swallowed (partial results kept).
+- **Lane exception (Phase 3):** job-search made a narrow, user-sanctioned edit to `src/main/index.ts` (refresh wiring + scheduler start/stop), added `errors` to `RefreshResponse` in `src/shared/ipc.ts`, and added optional `seniority?` on `RawJob`.
+- **Phase 3 NOT verified (scheduler):** the scheduler tick is untested live.
 - **Phase 5 NOT verified:** real browser open (`openExternal` stubbed), physical Ctrl+R, packaged menu removal / `npm run dist`, an actual cron tick, pointer interaction with Radix dropdowns/Select, axe accessibility audit, skeleton loading state, 1600px max-width, screen-reader announcements.
 - **Known issues / TODO (Phase 5):**
   1. Scoring false positive visible in UI: "Junior Business Developer" (sales-type role) scores 100 and tops New; the score doesn't use `roles` yet. Fix in Phase 8 with the user's labeled examples (consider requiring a software role tag).
   2. `useLegacyTable` from `@tanstack/react-table/legacy` is deprecated (v9); migrate to `useTable`/`tableFeatures`.
   3. A scheduled run that throws (non-source error) is only console-logged.
   4. `onOpen` depends on the useMutation result so columns rebuild each render (fine at ~70 rows).
-  5. The frontend agent used `taskkill /IM electron.exe`, which kills any other Electron apps the user has open. Future agents must kill only their own process.
-  6. `docs/dashboard-spec.md` still says "no manual toggle" (outdated: the toggle exists).
+  5. The frontend agent once used `taskkill /IM electron.exe` (kills the user's other Electron apps); now a rule in `RULES.md`/`AGENTS.md`.
   7. The agent reported replying to an "are you stuck?" message the main thread never sent; unexplained.
   8. The app's real userData DB now has an empty `meta` table from a dev run.
 - **Phase 6 verified (main session):** `npx vitest run` = 11 files, 153 passed, 0 failing. e2e reported passing 1/1 by the agents (test, and frontend with `sandbox: true`); NOT re-run by the main session after the sandbox change.
 - **Phase 6 NOT verified / open:** Ctrl+R and real navigation attempts in a packaged app (mocked only); tests encode CURRENT scoring behavior, not tuned (Phase 8); `e2e/` is not typechecked; sources/refresh/scheduler have mocked tests only, no live network tests; no mutation test of the visitedAt invariant. Earlier TODOs still open: `useLegacyTable`, scheduled-run crash surfacing, Junior Business Developer scoring false positive.
-- **Phase 7 status:** installer builds and the unpacked packaged app is verified; the installed (NSIS) flow is unverified pending the user. Phase 7b (Israel-only, on-site/hybrid sources, remote boards removed) is inserted before Phase 8. Several Notes below describe the remote boards and will be stale after 7b item 5.
+- **Phase 7 status:** installer builds and the unpacked packaged app is verified; the installed (NSIS) flow is unverified pending the user. Phase 7b (Israel-only, on-site/hybrid sources, remote boards removed) was inserted before Phase 8.
 - **Phase 7 (earlier note):** items left unchecked until verified. The `sandbox: false` review item from Phase 2 is DONE (sandbox is now true).
-- **RULES.md updated this session** (paths, Israel-only sources, architecture constraints). CLAUDE.md, README.md and the agent files remain STALE (old Next.js/Prisma paths and remote-board references); Phase 9 owns them.
+- **Docs (2026-10-07, user-approved):** RULES.md (lane additions, lane-exception, migration, renderer-hardening, process, doc-edit and verified-vs-claimed rules), AGENTS.md, CLAUDE.md (now a pointer file), README.md, `docs/dashboard-spec.md`, `training-data/README.md`, the scoring SKILL.md trims and all five `.claude/agents/*.md` were rewritten for the Electron stack. Agent-file edits take effect after a Claude Code restart.
+- **Approved Israeli boards:** SQLink only (see Phase 7b item 3). Hebrew boards (AllJobs/Drushim/JobMaster) are not built or approved.
 - **Phase 9a sequencing:** Phase 7c (Google Jobs source, awaiting user key) and Phase 8 (relevance tuning, awaiting the user's examples) remain OPEN. The intern exclusion is now user-confirmed. If Phase 8 happens, run Phase 9a after it so the cleanup does not churn code that is about to change; Phase 9 (docs) stays last.
-- **Git:** the project folder is now a git repository (`git init -b main` run by the main session on 2026-10-07, user-approved). NO commit has been made yet. `.gitignore` gained `test-results/`, `playwright-report/`, `.claude/settings.local.json`. This resolves the earlier docs-analysis note that the docs assume git while the folder was not a repo.
-- **Phase 4:** ui-ux assumed score 0-100; job-search's scoring output confirms 0-100. Open design questions were put to the user; answers will be recorded here once given.
+- **Git:** the project folder is now a git repository (`git init -b main` run by the main session on 2026-10-07, user-approved). A snapshot commit `3208d9a` exists; the Phase 9a cleanup changes (and the SQLink default-off change) are uncommitted. `.gitignore` gained `test-results/`, `playwright-report/`, `.claude/settings.local.json`. This resolves the earlier docs-analysis note that the docs assume git while the folder was not a repo.
+- **Phase 9a out-of-lane files touched (per RULES.md):** test edited `package.json` (typecheck scripts), outside its lane and NOT approved; frontend edited `src/shared/roles.ts` (job-search lane, approved) and several tests (sanctioned); job-search edited `src/main/jobs/upsert.ts` (its own lane).
+- **Still open overall:** installed (NSIS) flow only user-confirmed at a high level; uninstall, SmartScreen, code signing, custom icon; installer not yet rebuilt with the SQLink-off default (existing installs must untick SQLink manually until then); Phase 7c (waiting on the user's key); Phase 8 (waiting on the user's example jobs); Phase 9 final reconcile; agent-file edits need a Claude Code restart.
+- **Phase 4:** ui-ux assumed score 0-100; job-search's scoring output confirms 0-100.

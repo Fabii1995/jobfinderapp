@@ -1,4 +1,5 @@
 import type { RawJob, WorkMode } from './sources/types'
+import { escapeRe, WORD_END, WORD_START } from './text'
 
 /**
  * Location normalization + the Israel/work-mode ingest filter. Pure; no I/O.
@@ -11,14 +12,14 @@ import type { RawJob, WorkMode } from './sources/types'
  * "IL, Tel Aviv" matches through the city / its structured country_code ISR, not the "IL".
  */
 
-export interface NormalizedLocation {
+interface NormalizedLocation {
   /** 'IL' when any listed location is in Israel; otherwise the structured 2-letter country if given, else null. */
   country: string | null
   city: string | null
   workMode: WorkMode
 }
 
-export interface LocationInput {
+interface LocationInput {
   /** Free-text location(s). */
   location?: string | null
   /** Additional free-text locations (multi-location postings). */
@@ -74,12 +75,8 @@ const CITY_SPELLINGS: Record<string, string[]> = {
   'Kiryat Shmona': ['kiryat shmona', 'קריית שמונה']
 }
 
-function escapeRe(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-}
-
-const LB = '(?<![\\p{L}\\p{N}])'
-const LA = '(?![\\p{L}\\p{N}])'
+const LB = WORD_START
+const LA = WORD_END
 
 /**
  * Hebrew attaches prepositions to the next word ("ברמת גן" = in Ramat Gan, "מתל אביב" = from Tel Aviv),
@@ -128,7 +125,7 @@ export function isIsraelText(text: string | null | undefined): boolean {
 }
 
 /** Work arrangement from a structured value ('Hybrid', 'On-site', 'Remote', 'flex', ...). */
-export function parseWorkMode(v: string | null | undefined): WorkMode {
+function parseWorkMode(v: string | null | undefined): WorkMode {
   if (!v) return 'unknown'
   const t = v.toLowerCase()
   if (/hybrid|flex/.test(t)) return 'hybrid'

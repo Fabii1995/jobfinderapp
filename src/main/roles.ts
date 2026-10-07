@@ -1,5 +1,6 @@
 import { ROLES, type Role } from '../shared/roles'
 import type { RawJob } from './sources/types'
+import { wordMatcher } from './text'
 
 /**
  * Multi-label role classification from title AND description. Pure; no I/O.
@@ -20,26 +21,26 @@ import type { RawJob } from './sources/types'
  * "python" is a role like any other.
  */
 
-export const MIN_BODY_MENTIONS = 2
+const MIN_BODY_MENTIONS = 2
 /** Bounds regex cost on huge postings. */
-export const BODY_SCAN_CHARS = 20000
+const BODY_SCAN_CHARS = 20000
 /** A mention is "in a list" when its window holds >= this many distinct discipline words. */
-export const LIST_MIN_DISCIPLINES = 3
+const LIST_MIN_DISCIPLINES = 3
 /**
  * Short, ambiguous keywords: a mention that is just one item of a comma enumeration of
  * >= ENUM_MIN_COMMAS ("scripting, troubleshooting, QA, data analysis, ...", "React, Vue,
  * TypeScript, ...") is a skills/tools list entry, not role evidence, and is discarded.
  * Strong keywords (python, backend, frontend, ...) are NOT subject to this.
  */
-export const WEAK_BODY_KEYWORDS = ['qa', 'react', 'angular', 'vue', 'vue.js']
-export const ENUM_MIN_COMMAS = 2
-export const ENUM_ITEM_MAX_WORDS = 3
+const WEAK_BODY_KEYWORDS = ['qa', 'react', 'angular', 'vue', 'vue.js']
+const ENUM_MIN_COMMAS = 2
+const ENUM_ITEM_MAX_WORDS = 3
 /** Chars either side of a mention (clipped at sentence/line ends) inspected for list-ness. */
-export const LIST_WINDOW_CHARS = 80
+const LIST_WINDOW_CHARS = 80
 
 // ---- keyword lists (lowercase; matched case-insensitively on word boundaries) --------------
 
-export const QA_KEYWORDS = [
+const QA_KEYWORDS = [
   'בודק תוכנה',
   'בודקת תוכנה',
   'qa',
@@ -59,7 +60,7 @@ export const QA_KEYWORDS = [
   'testmanager'
 ]
 
-export const BACKEND_KEYWORDS = [
+const BACKEND_KEYWORDS = [
   'בקאנד',
   'backend',
   'back-end',
@@ -73,9 +74,9 @@ export const BACKEND_KEYWORDS = [
   'backendentwickler'
 ]
 
-export const PYTHON_KEYWORDS = ['python', 'פייתון', 'django', 'fastapi', 'flask']
+const PYTHON_KEYWORDS = ['python', 'פייתון', 'django', 'fastapi', 'flask']
 
-export const AI_KEYWORDS = [
+const AI_KEYWORDS = [
   'ai',
   'a.i.',
   'artificial intelligence',
@@ -93,7 +94,7 @@ export const AI_KEYWORDS = [
   'maschinelles lernen'
 ]
 
-export const FORWARD_DEPLOYED_KEYWORDS = [
+const FORWARD_DEPLOYED_KEYWORDS = [
   'forward deployed',
   'forward-deployed',
   'fde',
@@ -105,7 +106,7 @@ export const FORWARD_DEPLOYED_KEYWORDS = [
   'deployment engineer'
 ]
 
-export const FRONTEND_KEYWORDS = [
+const FRONTEND_KEYWORDS = [
   'frontend',
   'front-end',
   'front end',
@@ -117,13 +118,13 @@ export const FRONTEND_KEYWORDS = [
   'ui developer'
 ]
 
-export const FULLSTACK_KEYWORDS = ['full stack', 'full-stack', 'fullstack']
+const FULLSTACK_KEYWORDS = ['full stack', 'full-stack', 'fullstack']
 
 /**
  * `ai` keywords for the DESCRIPTION. Role-ish phrases only: bare "AI"/"ML"/"artificial
  * intelligence" are company-intro boilerplate far more often than job content.
  */
-export const AI_BODY_KEYWORDS = [
+const AI_BODY_KEYWORDS = [
   'machine learning',
   'deep learning',
   'llm',
@@ -149,10 +150,10 @@ export const AI_BODY_KEYWORDS = [
 ]
 
 /** Per-role DESCRIPTION keywords; defaults to the title list. */
-export const BODY_KEYWORD_OVERRIDES: Partial<Record<Role, string[]>> = { ai: AI_BODY_KEYWORDS }
+const BODY_KEYWORD_OVERRIDES: Partial<Record<Role, string[]>> = { ai: AI_BODY_KEYWORDS }
 
 /** Words that make a comma/slash/"and" enumeration a list of teams or disciplines. */
-export const DISCIPLINE_WORDS = [
+const DISCIPLINE_WORDS = [
   'backend', 'back-end', 'frontend', 'front-end', 'front end', 'fullstack', 'full-stack',
   'product', 'design', 'ux', 'ui', 'qa', 'quality assurance', 'testing', 'devops', 'data',
   'ml', 'ai', 'machine learning', 'engineering', 'infrastructure', 'security', 'mobile',
@@ -161,9 +162,9 @@ export const DISCIPLINE_WORDS = [
 ]
 
 /** Discarded from `ai` body evidence when followed by these ("LLM startup", "ML lab"). */
-export const AI_INTRO_FOLLOWERS = /^\s+(?:company|companies|startup|start-up|lab|labs|firm|research)\b/i
+const AI_INTRO_FOLLOWERS = /^\s+(?:company|companies|startup|start-up|lab|labs|firm|research)\b/i
 
-export const ROLE_KEYWORDS: Record<Role, string[]> = {
+const ROLE_KEYWORDS: Record<Role, string[]> = {
   qa: QA_KEYWORDS,
   backend: BACKEND_KEYWORDS,
   python: PYTHON_KEYWORDS,
@@ -175,15 +176,8 @@ export const ROLE_KEYWORDS: Record<Role, string[]> = {
 
 // ---- matching ------------------------------------------------------------------------------
 
-function escapeRe(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-}
-
-/** Longest alternatives first so "vue.js" wins over "vue". Global: used for counting. */
-function buildMatcher(words: string[]): RegExp {
-  const alts = [...words].sort((a, b) => b.length - a.length).map(escapeRe)
-  return new RegExp(`(?<![\\p{L}\\p{N}])(?:${alts.join('|')})(?![\\p{L}\\p{N}])`, 'giu')
-}
+/** Global (flag g) matchers: used for counting with matchAll, never with test(). */
+const buildMatcher = (words: string[]): RegExp => wordMatcher(words, 'giu')
 
 const TITLE_MATCHERS: Record<Role, RegExp> = Object.fromEntries(
   ROLES.map((r) => [r.slug, buildMatcher(ROLE_KEYWORDS[r.slug])])
@@ -267,9 +261,9 @@ function inDisciplineList(h: Hit, text: string): boolean {
   return words.size >= LIST_MIN_DISCIPLINES && separators >= LIST_MIN_DISCIPLINES - 1
 }
 
-export type RoleEvidenceWhere = 'title' | 'description-repeated'
+type RoleEvidenceWhere = 'title' | 'description-repeated'
 
-export interface RoleEvidence {
+interface RoleEvidence {
   role: Role
   where: RoleEvidenceWhere
   /** Matched keywords (lowercased) that counted, at that location. */

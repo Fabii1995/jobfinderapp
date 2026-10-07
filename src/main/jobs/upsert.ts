@@ -26,6 +26,11 @@ export const UPDATABLE_LISTING_FIELDS = [
 type UpdatableField = (typeof UPDATABLE_LISTING_FIELDS)[number]
 export type ScoredJob = RawJob & { score: number; roles: Role[] }
 
+/** The built (not yet executed) insert-on-conflict statement. */
+type UpsertStatement = ReturnType<
+  ReturnType<ReturnType<Db['insert']>['values']>['onConflictDoUpdate']
+>
+
 function buildUpdateSet(row: ScoredJob): Pick<ScoredJob, UpdatableField> {
   const set: Record<string, unknown> = {}
   for (const f of UPDATABLE_LISTING_FIELDS) set[f] = row[f]
@@ -37,7 +42,7 @@ function buildUpdateSet(row: ScoredJob): Pick<ScoredJob, UpdatableField> {
  * Insert side leaves visitedAt unset (NULL) and stamps firstSeenAt = now.
  * Exported so tests can inspect the generated SQL via `.toSQL()`.
  */
-export function buildUpsertStatement(db: Db, row: ScoredJob, now: number) {
+export function buildUpsertStatement(db: Db, row: ScoredJob, now: number): UpsertStatement {
   return db
     .insert(jobs)
     .values({

@@ -1,5 +1,5 @@
 export const SCORE_MAX = 100
-export const TIERS = { strong: 70, possible: 40 } as const // >=70 strong, 40-69 possible, <40 weak
+const TIERS = { strong: 70, possible: 40 } as const // >=70 strong, 40-69 possible, <40 weak
 
 export type Tier = 'strong' | 'possible' | 'weak'
 

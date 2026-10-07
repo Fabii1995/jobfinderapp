@@ -5,9 +5,9 @@ function subscribe(cb: () => void): () => void {
   return () => window.removeEventListener('resize', cb)
 }
 
-export const COMPACT_BREAKPOINT = 1100
+const COMPACT_BREAKPOINT = 1100
 
-export function useWindowWidth(): number {
+function useWindowWidth(): number {
   return useSyncExternalStore(
     subscribe,
     () => window.innerWidth,

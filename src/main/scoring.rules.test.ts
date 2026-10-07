@@ -11,24 +11,12 @@ import {
 } from './scoring'
 import { MIN_SCORE } from './ingest/refresh'
 import type { RawJob } from './sources/types'
+import { rawJob, scoreTitle } from './testing/fixtures'
 
-const job = (title: string, extra: Partial<RawJob> = {}): RawJob => ({
-  source: 'greenhouse:x',
-  externalId: 'x',
-  title,
-  company: 'Co',
-  url: 'https://example.com',
-  description: null,
-  location: null,
-  country: 'IL',
-  city: null,
-  workMode: 'unknown',
-  postedAt: null,
-  ...extra
-})
+const job = (title: string, extra: Partial<RawJob> = {}): RawJob => rawJob({ title, ...extra })
 
-describe('Phase 7b experience rules (user decisions)', () => {
-  const s = (t: string, d: string | null): number => scoreJob(job(t, { description: d }))
+describe('experience-requirement rules (user decisions)', () => {
+  const s = scoreTitle
   const BASE = 'Software Engineer'
 
   it('no experience stated at all: a plain software title lands at MIN_SCORE, below clear junior titles', () => {
@@ -154,7 +142,7 @@ describe('Phase 7b experience rules (user decisions)', () => {
   })
 })
 
-describe('Phase 7b follow-ups', () => {
+describe('experience rules: largest minimum wins, Hebrew hardware-test titles', () => {
   it('a "1+" bullet next to a "2+" bullet is not junior (the larger minimum wins)', () => {
     const d = '- 2+ years of non-internship professional software development experience\n- 1+ years of non-internship design experience'
     expect(bodyJuniorStrength(d)).toBe(null)
@@ -165,9 +153,9 @@ describe('Phase 7b follow-ups', () => {
   })
 })
 
-describe('Phase 7b follow-ups (2)', () => {
+describe('experience rules: Hebrew tech tokens and "user experience" false positives', () => {
   const BASE = 'Software Engineer'
-  const s = (t: string, d: string | null): number => scoreJob(job(t, { description: d }))
+  const s = scoreTitle
   it('Hebrew tech tokens with digits do not suppress the baseline', () => {
     expect(s(BASE, 'ניסיון ב-K8s ו-AWS S3, Python 3, Angular 2+, ES6, 24/7')).toBe(30)
     expect(s(BASE, 'ניסיון בפיתוח ב-EC2')).toBe(30)

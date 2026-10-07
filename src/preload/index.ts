@@ -23,7 +23,6 @@ const api: JobFinderApi = {
 }
 
 // Ctrl+R hook (main intercepts the key; see src/main/shortcuts.ts). Returns an unsubscribe fn.
-// TODO(5b): once jobs refresh wiring exists, fold this into JobFinderApi in src/shared/ipc.ts if desired.
 const appShortcuts = {
   onRefresh: (cb: () => void): (() => void) => {
     const listener = (): void => cb()
@@ -32,8 +31,7 @@ const appShortcuts = {
   }
 }
 
-// Sandboxed preload: may only require 'electron' (no bundled-external npm packages), so
-// @electron-toolkit/preload's electronAPI is deliberately not used (nothing in the renderer reads it).
+// Sandboxed preload: may only require 'electron' (no bundled-external npm packages).
 if (process.contextIsolated) {
   try {
     contextBridge.exposeInMainWorld('api', api)

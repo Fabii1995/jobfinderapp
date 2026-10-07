@@ -11,51 +11,11 @@ import {
 import { MIN_SCORE } from './ingest/refresh'
 import { classifyRoles } from './roles'
 import type { RawJob } from './sources/types'
+import { rawJob, scoreTitle } from './testing/fixtures'
 
-const job = (title: string, extra: Partial<RawJob> = {}): RawJob => ({
-  source: 'greenhouse:x',
-  externalId: 'x',
-  title,
-  company: 'Co',
-  url: 'https://example.com',
-  description: null,
-  location: null,
-  country: 'IL',
-  city: null,
-  workMode: 'unknown',
-  postedAt: null,
-  ...extra
-})
+const job = (title: string, extra: Partial<RawJob> = {}): RawJob => rawJob({ title, ...extra })
 
 describe('scoreJob', () => {
-  it('junior target-role titles pass MIN_SCORE', () => {
-    for (const t of [
-      'Junior QA Engineer',
-      'Junior Python Developer',
-      'Entry Level Backend Developer',
-      'Graduate Software Engineer',
-      'New Grad Backend Engineer',
-      'New College Graduate, Software Engineer'
-    ]) {
-      expect(scoreJob(job(t)), t).toBeGreaterThanOrEqual(MIN_SCORE)
-    }
-  })
-
-  it('senior titles are an immediate reject (score 0)', () => {
-    for (const t of [
-      'Senior Backend Engineer',
-      'Sr. Python Developer',
-      'Sr QA Engineer',
-      'Staff Software Engineer',
-      'Lead Python Developer',
-      'Principal QA Engineer',
-      'מפתח בכיר',
-      'SENIOR qa engineer'
-    ]) {
-      expect(scoreJob(job(t)), t).toBe(0)
-    }
-  })
-
   it('a senior title is never rescued by a junior-looking description or tag', () => {
     const rescue = {
       description: 'No experience required. Entry level. 0-2 years. Recent graduates welcome.',
@@ -72,23 +32,6 @@ describe('scoreJob', () => {
     expect(scoreJob(job('Seniority Analyst QA'))).toBeGreaterThan(0) // "Seniority" is not "senior"
   })
 
-  it('junior outranks mid-level for the same role', () => {
-    expect(scoreJob(job('Junior Backend Engineer'))).toBeGreaterThan(scoreJob(job('Backend Engineer II')))
-  })
-
-  it('score is an integer clamped to 0..100', () => {
-    const hi = scoreJob(
-      job('Junior QA Engineer', { description: 'entry-level, 0-2 years', seniority: ['Entry-level'] })
-    )
-    expect(hi).toBe(100)
-    expect(scoreJob(job('Senior Director', { description: '10+ years', seniority: ['Senior'] }))).toBe(0)
-  })
-
-  it('a strong-role title with a stated non-junior experience requirement sits exactly at MIN_SCORE; with none stated it gets the baseline', () => {
-    expect(scoreJob(job('Backend Engineer', { description: '2+ years of experience' }))).toBe(MIN_SCORE)
-    expect(scoreJob(job('Backend Engineer'))).toBe(MIN_SCORE + WEIGHTS.noExperienceBaseline)
-  })
-
   it('NO_ROLE_TITLE_CAP: junior-but-irrelevant titles are capped and below MIN_SCORE', () => {
     const s = scoreJob(
       job('Junior Marketing Specialist', { description: 'entry-level', seniority: ['Entry-level'] })
@@ -98,11 +41,6 @@ describe('scoreJob', () => {
     expect(scoreJob(job('Junior Graphic Designer'))).toBeLessThanOrEqual(NO_ROLE_TITLE_CAP)
   })
 
-  it('"Junior Business Developer" (sales) is not a software role', () => {
-    expect(scoreJob(job('Junior Business Developer'))).toBeLessThan(MIN_SCORE)
-    expect(scoreJob(job('Junior Business Development Representative'))).toBeLessThan(MIN_SCORE)
-  })
-
   it('junior Java/.NET (general-role-only) is capped below a junior strong-role title', () => {
     const java = scoreJob(job('Junior Java Developer', { description: '0-2 years', seniority: ['entry-level'] }))
     expect(java).toBe(GENERAL_ROLE_ONLY_CAP)
@@ -110,12 +48,6 @@ describe('scoreJob', () => {
     expect(scoreJob(job('Junior Python Developer'))).toBeGreaterThan(
       scoreJob(job('Junior Java Developer'))
     )
-  })
-
-  it('"associate" is a moderate junior signal', () => {
-    const assoc = scoreJob(job('Associate Backend Engineer'))
-    expect(assoc).toBeGreaterThan(MIN_SCORE)
-    expect(assoc).toBeLessThan(scoreJob(job('Junior Backend Engineer')))
   })
 
   it('intern / student titles are not junior-positive and fall below MIN_SCORE', () => {
@@ -138,29 +70,13 @@ describe('scoreJob', () => {
     expect(scoreJob(job('International Backend Engineer'))).toBe(MIN_SCORE + WEIGHTS.noExperienceBaseline)
   })
 
-  it('intern seniority tag (Amazon is_intern) also caps', () => {
-    expect(scoreJob(job('Software Engineer', { seniority: ['intern'] }))).toBeLessThanOrEqual(INTERN_TITLE_CAP)
-  })
-
-  it('hardware/chip titles and penetration testers are not software backend/QA', () => {
-    for (const t of ['Physical Design Backend Engineer', 'IC Test Engineer', 'Penetration Tester & Security Researcher']) {
-      expect(scoreJob(job(t)), t).toBeLessThan(MIN_SCORE)
-    }
+  it('a penetration tester is not tagged as QA', () => {
     expect(classifyRoles({ title: 'Penetration Tester', description: null })).not.toContain('qa')
-    expect(scoreJob(job('Software QA Engineer'))).toBe(MIN_SCORE + WEIGHTS.noExperienceBaseline)
-  })
-
-  it('SDE titles count as general software roles', () => {
-    expect(scoreJob(job('2026 Graduate Software Dev Engineer'))).toBeGreaterThanOrEqual(MIN_SCORE)
-  })
-
-  it('works with an empty title', () => {
-    expect(scoreJob(job(''))).toBe(0)
   })
 })
 
 describe('description experience language', () => {
-  const s = (t: string, d: string): number => scoreJob(job(t, { description: d }))
+  const s = scoreTitle
 
   it('range from 0 / "up to" with upper bound <=2 is strong, 3 moderate, 4-5 weak', () => {
     expect(bodyJuniorStrength('0-2 years of experience')).toBe('strong')
@@ -208,11 +124,6 @@ describe('description experience language', () => {
     )
   })
 
-  it('description can make a no-junior-word title pass', () => {
-    expect(s('Software Engineer', 'Requirements: 0-2 years of experience.')).toBeGreaterThanOrEqual(MIN_SCORE + 10)
-    expect(s('Backend Developer', 'Up to 2 years experience')).toBeGreaterThan(s('Backend Developer', 'Great team'))
-  })
-
   it('a stated minimum of 3+ years stays a penalty; "0-3" is not read as 3', () => {
     const plain = s('Backend Developer', 'Great team.')
     for (const d of ['3+ years of experience', '5+ years', '3-5 years experience', 'at least 4 years', '5 years of Python experience']) {
@@ -223,11 +134,6 @@ describe('description experience language', () => {
     expect(s('Backend Developer', 'founded 10+ years ago')).toBe(plain)
   })
 
-  it('Workday New College Graduate tag (entry-level) is a junior signal', () => {
-    expect(s('Software Engineer', 'x')).toBeLessThan(
-      scoreJob(job('Software Engineer', { description: 'x', seniority: ['entry-level'] }))
-    )
-  })
 })
 
 describe('role tagging false positives', () => {

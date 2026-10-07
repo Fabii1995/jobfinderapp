@@ -1,7 +1,7 @@
 import cron from 'node-cron'
 
 /** Every 3 hours, on the hour. */
-export const REFRESH_CRON = '0 */3 * * *'
+const REFRESH_CRON = '0 */3 * * *'
 
 /** Starts the periodic refresh. Errors are logged, never thrown. Returns a stop function. */
 export function startScheduler(run: () => Promise<unknown>): () => void {

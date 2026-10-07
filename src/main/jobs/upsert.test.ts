@@ -1,11 +1,12 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { eq } from 'drizzle-orm'
-import { openDb, type Db } from '../db'
+import { memDb } from '../testing/db'
 import { jobs } from '../db/schema'
-import { buildUpsertStatement, upsertJobs, UPDATABLE_LISTING_FIELDS, type ScoredJob } from './upsert'
+import { buildUpsertStatement, upsertJobs, UPDATABLE_LISTING_FIELDS } from './upsert'
+import { scoredJob } from '../testing/fixtures'
 import { getJobById, markVisited } from './queries'
 
-const base: ScoredJob = {
+const base = scoredJob({
   source: 'arbeitnow',
   externalId: 'abc-1',
   title: 'Junior QA Engineer',
@@ -13,20 +14,12 @@ const base: ScoredJob = {
   url: 'https://example.com/1',
   description: 'old description',
   location: 'Berlin',
-  country: 'IL',
-  city: null,
-  workMode: 'unknown',
   postedAt: 1_000,
   score: 70,
   roles: ['qa']
-}
-
-let db: Db
-let close: () => void
-beforeEach(() => {
-  ;({ db, close } = openDb(':memory:'))
 })
-afterEach(() => close())
+
+const db = memDb()
 
 describe('upsert preserves visitedAt', () => {
   it('refreshing an already-visited job does not clear visitedAt or firstSeenAt', () => {

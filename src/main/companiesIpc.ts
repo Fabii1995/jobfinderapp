@@ -20,7 +20,7 @@ import {
   type CompanyMutationResponse
 } from '../shared/ipc'
 
-export interface CompaniesIpcDeps {
+interface CompaniesIpcDeps {
   db: Db
   /** Directory holding companies.json (Electron userData). Only touched inside handlers (lazy). */
   dir: string

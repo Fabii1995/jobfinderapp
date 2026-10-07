@@ -1,4 +1,5 @@
 import type { Job } from '../main/db/schema'
+import type { Ats } from '../main/companies/types'
 
 export type { Job }
 
@@ -17,16 +18,10 @@ export const IPC = {
   changed: 'jobs:changed'
 } as const
 
-export type WorkMode = 'onsite' | 'hybrid' | 'remote' | 'unknown'
-export const WORK_MODES: readonly WorkMode[] = ['onsite', 'hybrid', 'remote', 'unknown']
-
 export interface ListJobsRequest {
   visited: boolean
-  /** Optional server-side filters (invalid values are ignored). The renderer filters client-side. */
-  workMode?: WorkMode
-  company?: string
 }
-export type ListJobsResponse = Job[]
+type ListJobsResponse = Job[]
 
 export interface SourceOutcome {
   source: string
@@ -59,26 +54,17 @@ export interface LastRefresh {
   sources: SourceOutcome[]
 }
 
-export type VisitResponse = Job | null
+type VisitResponse = Job | null
 
 export interface JobStats {
   newCount: number
   visitedCount: number
-  bySource: Record<string, number>
   /** Time of the last refresh (from the meta table); null if never refreshed. */
   lastRefreshAt: number | null
   lastRefresh: LastRefresh | null
 }
 
-export type Ats =
-  | 'greenhouse'
-  | 'comeet'
-  | 'lever'
-  | 'smartrecruiters'
-  | 'ashby'
-  | 'workday'
-  | 'amazon'
-  | 'sqlink'
+export type { Ats }
 
 /** One configured company (mirror of main/companies/types CompanyEntry). `id` == jobs.source. */
 export interface Company {
@@ -95,7 +81,7 @@ export interface CompaniesListResponse {
   error?: string
 }
 
-export interface AddCompanyRequest {
+interface AddCompanyRequest {
   /** A careers-page URL (max 2048 chars). */
   url: string
   /** Optional display name; defaults to one derived from the URL. */

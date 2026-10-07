@@ -1,11 +1,10 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { eq, sql } from 'drizzle-orm'
-import { openDb, type Db } from '../db'
+import { memDb } from '../testing/db'
 import { jobs } from '../db/schema'
 import { getLastRefresh, getStats, listJobs, markVisited, saveLastRefresh } from './queries'
 
-let db: Db
-let close: () => void
+const db = memDb()
 
 function add(externalId: string, o: Partial<typeof jobs.$inferInsert> = {}): number {
   return db
@@ -22,10 +21,6 @@ function add(externalId: string, o: Partial<typeof jobs.$inferInsert> = {}): num
     .get().id
 }
 
-beforeEach(() => {
-  ;({ db, close } = openDb(':memory:'))
-})
-afterEach(() => close())
 
 describe('listJobs', () => {
   it('New: only unvisited, ordered by score desc then postedAt desc (nulls last)', () => {
@@ -57,13 +52,12 @@ describe('getStats', () => {
     expect(getStats(db)).toMatchObject({
       newCount: 0,
       visitedCount: 0,
-      bySource: {},
       lastRefreshAt: null,
       lastRefresh: null
     })
   })
 
-  it('counts new/visited/bySource and reads lastRefresh from meta', () => {
+  it('counts new/visited and reads lastRefresh from meta', () => {
     add('1')
     add('2', { source: 'arbeitnow' })
     markVisited(db, add('3', { source: 'arbeitnow' }))
@@ -76,7 +70,6 @@ describe('getStats', () => {
     const s = getStats(db)
     expect(s.newCount).toBe(2)
     expect(s.visitedCount).toBe(1)
-    expect(s.bySource).toEqual({ remoteok: 1, arbeitnow: 2 })
     expect(s.lastRefreshAt).toBe(12345)
     expect(s.lastRefresh).toMatchObject({ at: 12345, inserted: 2, updated: 1 })
   })

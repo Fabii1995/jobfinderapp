@@ -33,7 +33,6 @@ Required: `id, url, label ('fit'|'no-fit'), title, company, location, descriptio
 
 ## Commands
 
-- `npm run examples:add -- <url-or-id>... [--label fit|no-fit] [--reason "..."] [--text-file path] [--title ..] [--company ..] [--location ..] [--db path]`
-- `npm run examples:report` scores every example with the current scoring and lists mismatches first.
+`npm run examples:add` and `npm run examples:report` (flags: see `AGENTS.md`). `examples:report` scores every example with the current scoring (score, kept/rejected, rejection reasons, roles, experience wording) and lists mismatches first.
 
 Sources: supported ATS job URLs use that ATS's public single-posting endpoint; other pages only when robots.txt allows and they carry JSON-LD `JobPosting`. LinkedIn, Indeed, Glassdoor and similar sites are NEVER fetched (RULES.md): a stub is written and the user pastes the job text (`--text-file`). Never put API keys in this file.

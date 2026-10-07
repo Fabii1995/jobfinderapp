@@ -1,10 +1,26 @@
 import { Check } from 'lucide-react'
-import type { LegacyColumnDef } from '@tanstack/react-table/legacy'
+import {
+  columnVisibilityFeature,
+  createSortedRowModel,
+  rowSortingFeature,
+  sortFns,
+  tableFeatures,
+  type ColumnDef
+} from '@tanstack/react-table'
 import type { Job } from '@renderer/lib/types'
 import { WORK_MODE_LABEL } from '@renderer/lib/filters'
 import { daysSincePosted, formatAbsolute, formatRelative } from '@renderer/lib/time'
 import { ScoreBadge } from './ScoreBadge'
 import { JobCell } from './JobCell'
+
+/** Table features: sorting (client-side) and column visibility (compact / Visited-only columns). */
+export const jobTableFeatures = tableFeatures({
+  rowSortingFeature,
+  columnVisibilityFeature,
+  sortedRowModel: createSortedRowModel(),
+  sortFns
+})
+export type JobTableFeatures = typeof jobTableFeatures
 
 export type ColumnId = 'score' | 'job' | 'workMode' | 'location' | 'postedAt' | 'visitedAt'
 
@@ -34,7 +50,7 @@ function WorkModeText({ mode }: { mode: string | null }): React.JSX.Element {
 }
 
 // Null values map to `undefined` so `sortUndefined: 'last'` keeps them last in both directions.
-export function buildColumns({ compact, now, onOpen }: Opts): LegacyColumnDef<Job>[] {
+export function buildColumns({ compact, now, onOpen }: Opts): ColumnDef<JobTableFeatures, Job>[] {
   return [
     {
       id: 'score',

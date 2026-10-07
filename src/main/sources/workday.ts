@@ -1,5 +1,6 @@
 import { normalizeLocation } from '../location'
 import { isHardRejectTitle } from '../scoring'
+import { wordMatcher } from '../text'
 import { asArray, asRecord, asString, dateToMs, mapLimit, sleep, stripHtml } from './http'
 import { requireWorkday } from './params'
 import type { ConnectorContext, ConnectorFn, RawJob } from './types'
@@ -8,7 +9,7 @@ const PAGE = 20 // Workday rejects larger limits on some tenants
 const MAX_PAGES = 80
 const DETAIL_CONCURRENCY = 3
 
-const ISRAEL_FACET = /(?<![\p{L}\p{N}])(?:israel|ישראל)(?![\p{L}\p{N}])/iu
+const ISRAEL_FACET = wordMatcher(['israel', 'ישראל'])
 const NEW_GRAD_FACET = /new college grad|new grad|early career|university grad/i
 
 export interface FacetFilter {

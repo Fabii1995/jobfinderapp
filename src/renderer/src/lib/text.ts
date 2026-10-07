@@ -1,4 +1,4 @@
-export const EXCERPT_MAX = 280
+const EXCERPT_MAX = 280
 
 /**
  * Plain-text excerpt of a description that may contain HTML. DOMParser builds an inert

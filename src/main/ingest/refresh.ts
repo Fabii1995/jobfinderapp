@@ -9,31 +9,19 @@ import { scoreJob } from '../scoring'
 import { fetchCompany } from '../sources'
 import { mapLimit } from '../sources/http'
 import type { RawJob } from '../sources/types'
+import type { SourceOutcome } from '../../shared/ipc'
 
 /**
- * Jobs scoring below this are dropped before storage. 30 = exactly one strong target-role
- * title (QA/backend/python/AI-solutions/FDE) with no seniority penalty, or a general software
- * title plus any junior signal, or a general software title with no experience requirement stated at all (baseline, exactly 30). Bare general titles with a stated non-junior requirement (20), role-less junior postings (capped at
- * NO_ROLE_TITLE_CAP = 25), intern/student titles (capped at 20) and senior titles (0) fall
- * below. Unchanged by the Israel-only rework. Revisit once training-data/examples.json exists.
+ * Jobs scoring below this are dropped before storage. 30 is reached by:
+ *   - one strong target-role title (QA/backend/python/AI-solutions/FDE) with no seniority penalty,
+ *   - a general software title plus any junior signal, or
+ *   - a general software title whose posting states no experience requirement at all
+ *     (the no-experience baseline, exactly 30).
+ * Below it: bare general titles with a stated non-junior requirement (20), role-less junior
+ * postings (capped at NO_ROLE_TITLE_CAP = 25), intern/student titles (capped at 20) and senior
+ * titles (0).
  */
 export const MIN_SCORE = 30
-
-export interface SourceOutcome {
-  /** Connector id (== jobs.source), e.g. 'greenhouse:wizinc', 'amazon'. One entry per company. */
-  source: string
-  ok: boolean
-  /** Jobs fetched from this company (BEFORE the Israel/work-mode and MIN_SCORE filters). Set when ok. */
-  count?: number
-  /** Failure message. Set when !ok. */
-  error?: string
-  /** Company display name. */
-  name?: string
-  /** Fetched jobs located in Israel and not remote-only (before MIN_SCORE). Set when ok. */
-  israel?: number
-  /** Jobs that passed both filters and were stored/updated. Set when ok. */
-  kept?: number
-}
 
 export interface RefreshResult {
   inserted: number
