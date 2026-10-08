@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { useUiStore } from '@renderer/store/ui'
+import { isLinkedInJob } from '@renderer/lib/jsearch'
 import type { Job } from '@renderer/lib/types'
 import { jobKeys } from './useJobs'
 
@@ -11,6 +12,7 @@ import { jobKeys } from './useJobs'
 export function useOpenJob() {
   const qc = useQueryClient()
   const setAnnounce = useUiStore((s) => s.setAnnounce)
+  const setLinkedinHintShown = useUiStore((s) => s.setLinkedinHintShown)
 
   return useMutation({
     mutationFn: async (job: Job) => {
@@ -20,7 +22,12 @@ export function useOpenJob() {
     },
     onSuccess: async (_res, job) => {
       if (job.visitedAt == null) {
-        toast('Moved to Visited', { description: job.title ?? 'Untitled role', duration: 3000 })
+        const hint = isLinkedInJob(job) && !useUiStore.getState().linkedinHintShown
+        if (hint) setLinkedinHintShown()
+        toast('Moved to Visited', {
+          description: `${job.title ?? 'Untitled role'}${hint ? '. LinkedIn may ask you to sign in.' : ''}`,
+          duration: hint ? 5000 : 3000
+        })
         setAnnounce(`Moved ${job.title ?? 'job'} to Visited`)
       }
       await qc.invalidateQueries({ queryKey: jobKeys.all })

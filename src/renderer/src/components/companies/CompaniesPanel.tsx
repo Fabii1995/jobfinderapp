@@ -4,6 +4,7 @@ import { Alert, AlertDescription, AlertTitle } from '@renderer/components/ui/ale
 import { Badge } from '@renderer/components/ui/badge'
 import { Button } from '@renderer/components/ui/button'
 import { Input } from '@renderer/components/ui/input'
+import { DeepSearchPanel } from './DeepSearchPanel'
 import { Skeleton } from '@renderer/components/ui/skeleton'
 import {
   useCompaniesQuery,
@@ -221,7 +222,8 @@ export function CompaniesPanel(): React.JSX.Element {
   const enabledCount = companies.filter((c) => c.enabled).length
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-3" data-testid="companies-panel">
+    <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto" data-testid="companies-panel">
+      <DeepSearchPanel />
       <AddCompanyBox />
       {listQ.data?.error && (
         <Alert variant="destructive" data-testid="companies-error">
@@ -247,7 +249,7 @@ export function CompaniesPanel(): React.JSX.Element {
       ) : (
         <ul
           aria-label="Companies"
-          className="max-h-[60vh] min-h-[260px] flex-1 overflow-y-auto rounded-lg border"
+          className="min-h-[260px] flex-1 rounded-lg border"
           data-testid="companies-list"
         >
           {companies.map((c) => (

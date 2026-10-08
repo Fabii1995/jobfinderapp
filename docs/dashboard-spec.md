@@ -279,3 +279,91 @@ Accessibility
 - [ ] Table uses `table/thead/th[scope=col]/tbody/tr/td`; axe-core reports 0 serious/critical violations in light and dark, at 900x600, 1280x800 and maximized.
 - [ ] Responsive: at 900 wide Work mode and Location columns are absent and no horizontal scroll; at 1280 all columns present; maximized content stays <= 1600px wide and centered; at 900x600 the list region scrolls and the page body does not.
 - [ ] `prefers-color-scheme: dark` flips `html.dark`; `prefers-reduced-motion` stops spinner animation.
+
+---
+
+## 10. Deep search (JSearch + SerpApi backup), opt-in settings
+
+Owner: ui-ux. Implementer: frontend (implemented: `components/companies/DeepSearchPanel.tsx`, `hooks/useDeepSearch.ts`, `lib/jsearch.ts`). Approved by RULES.md "Sources and secrets" (JSearch exception). Deep search is an optional extra: off until the user enters a key, never on the 3h refresh, ~weekly automatic run plus manual "Deep refresh". Two providers: **JSearch (OpenWebNinja)** is preferred; **SerpApi (Google Jobs)** is an optional backup. Reuse existing primitives only (bordered section, `Input`, `Button`, `Alert`, `Badge`, `Skeleton`, sonner); no `dialog`, `progress` or `collapsible` (the progress bars are styled `div`s, 10.4).
+
+### 10.1 Placement and header
+A panel at the top of the Companies tab, directly above `AddCompanyBox` in `CompaniesPanel` (no dialog: excluded in 7.1, hides state, header is crowded at 900px). `<section aria-labelledby="deep-search-title" aria-busy data-testid="deepsearch" class="flex flex-col gap-3 rounded-lg border p-3">`, `h3 text-sm font-semibold` **"Deep search"**, right-aligned status `Badge variant="outline"`. Badge states (text is the state, never color alone):
+
+| Badge | When |
+|---|---|
+| Off | neither provider has a key |
+| On: JSearch | a key exists and `activeProvider === 'jsearch'` |
+| On: SerpApi | a key exists and `activeProvider === 'serpapi'` |
+| On | a key exists but `activeProvider === 'none'` and nothing is blocked (monthly limits reached) |
+| Paused (`AlertTriangle`) | `activeProvider === 'none'` and either provider is blocked |
+
+While one provider is paused but the other serves, the badge shows the serving one and the paused provider's alert (10.4) shows in its section. Below the title row: the explainer (10.3), then the controls: JSearch section, SerpApi section, run row, last-run line. The panel scrolls with the tab content (one scroller on the `CompaniesPanel` wrapper).
+
+### 10.2 Data and actions
+`JSearchStatus` (`src/shared/jsearch.ts`, never contains keys): flat fields are JSearch's own `{configured, used, softLimit, month 'YYYY-MM' UTC, blocked, blockedReason, blockedUntil ISO, lastRunAt ISO, lastRunSummary {fetched, kept, inserted, updated, skippedDuplicates, requests, provider?}}` plus `serpapi {configured, used, cap, blocked, blockedReason, blockedUntil}`, `fallbackThreshold`, `activeProvider 'jsearch'|'serpapi'|'none'`. **All limits come from status; the UI hard-codes none.** Current values: JSearch app limit (`softLimit`) 200 (the user's plan), fallback threshold 170, SerpApi `cap` 250 (user-confirmed). Actions: `setKey/clearKey`, `setSerpapiKey/clearSerpapiKey` (return `{ok:true}|{ok:false,error}`; max length 256), `deepRefresh() -> {ok, message, summary?, provider?}`. Query key `['deepSearch','status']`; every mutation invalidates it, and a deep refresh also invalidates jobs. The UI never receives a key.
+
+### 10.3 Explainer and fallback behavior
+Explainer (`text-xs text-muted-foreground`, always visible, it is the consent text): "Optional. Adds extra junior roles found through the JSearch (OpenWebNinja) service using your own free API key. Many results are LinkedIn links: the app only saves the link and opens it in your browser (LinkedIn may ask you to sign in). It never loads or reads LinkedIn itself. Runs about weekly and when you press Deep refresh, not on the 3-hour refresh. Your keys are stored only on this computer." The SerpApi section has its own note: "SerpApi (Google Jobs) is an optional backup with its own free key. The app uses it only when JSearch is near its monthly limit, paused, or has no key. It also saves links only."
+
+Provider selection (main decides, UI only displays `activeProvider`): JSearch is preferred. SerpApi is used only when it is usable (key, not paused, under its cap) AND JSearch is keyless, paused (401/403/429), or has >= 170 requests used (or is at its limit). Exactly one provider per run. **Shared run state:** last run and the 7-day automatic gate are shared; a run by either provider updates "Last run" and restarts the 7-day gate. Saving a DIFFERENT key for a provider lifts that provider's block but keeps its monthly counter, so the cap still applies after a key swap.
+
+### 10.4 Provider sections
+Two `<section aria-labelledby>` blocks with `h4 text-xs font-semibold`: **"JSearch (OpenWebNinja)"** and **"SerpApi (Google Jobs), backup"** (the latter followed by its note). Each contains, in order:
+- **Key controls.** No key: text "No key" then `<form noValidate>` with visible `<label>` "{JSearch|SerpApi} API key" wrapping `Input type=password autoComplete=off spellCheck=false autoCapitalize=off maxLength=256 h-8` (no Show toggle), Save button "Save key" ("Saving..." pending; disabled when trimmed empty/pending), and an always-rendered `<p role="alert">` below (`aria-describedby` target) for `{ok:false}` errors (`aria-invalid`, typed value kept). On success the input state is cleared immediately and a `role="status"` notice "Key saved." shows; the key is never echoed, logged or toasted. Key set: `Check` + "Key set", `Replace key` (`outline`, `default` when that provider is blocked so it is the visible next step) and `Remove key` (`ghost`). Replace swaps in the same form with autofocus plus Cancel; Esc cancels (only in Replace mode). Remove is an inline confirm: "Saved jobs stay." + destructive `Remove` + `Cancel`; then notice "Key removed. {name} is off."
+- **Alerts (only when configured).** Paused: `Alert` (`AlertTriangle`) title "{name} is paused", description = reason, then "It turns back on {date}." (`blockedUntil` formatted `dateStyle:'medium'`, absolute time in `title`) or "It will retry on the next scheduled run." when null/past; `data-testid="deepsearch[-serpapi]-blocked"`. Limit: title "{name}: monthly limit reached", description "Available again on {reset date}." (`...-limit`). Paused takes precedence over limit.
+- **Quota (only when configured).** "**{used} / {limit} this month** Resets on {date}." (reset date = first of next UTC month, UTC date). JSearch limit = `softLimit`, SerpApi limit = `serpapi.cap`; the SerpApi line adds "Takes over when JSearch reaches {fallbackThreshold}." Bar: `role="progressbar"` `aria-label` **"JSearch monthly requests"** / **"SerpApi monthly searches"**, `aria-valuemin 0`, `aria-valuemax {limit}`, `aria-valuenow min(used,limit)`, `aria-valuetext "{used} of {limit} requests used this month"`, `h-1.5 rounded-full bg-secondary`; fill `bg-primary` < 80%, `bg-score-possible-fg` 80-99%, `bg-destructive` >= 100% (clamped; text keeps the real number); `transition-[width] motion-reduce:transition-none`. testids `deepsearch-quota`, `deepsearch-serpapi-quota`.
+
+### 10.5 Deep refresh and hint
+Run row: `Button size="sm"` `data-testid="deepsearch-run"` "Deep refresh" (`Radar`), always rendered (also with no key), disabled when `activeProvider === 'none'` or running; `aria-describedby="deepsearch-run-hint"`; running: `aria-busy`, "Deep refreshing...", `Loader2` `animate-spin motion-reduce:animate-none`. Next to it a `role="status"` hint (always visible text, not tooltip):
+- running: "Searching, this can take a minute."
+- JSearch active: "Next run uses JSearch."
+- SerpApi active: "Next run uses SerpApi (Google Jobs) because {JSearch has no key | JSearch is paused | JSearch reached its monthly limit | JSearch is near its monthly limit (N of 170 used)}."
+- none, no keys: "Add a key to use Deep refresh."
+- none, any provider paused: "Paused, see above."
+- none otherwise: "No search available: monthly limits reached. Available again {reset date}."
+A failed run shows an inline `role="alert"` line with the message (cleared on the next run).
+
+### 10.6 Last run and toasts
+`<p data-testid="deepsearch-last-run" class="text-xs text-muted-foreground">`: "Last run {relative, absolute in title} via {JSearch|SerpApi}: {fetched} found, {kept} kept, {inserted} new, {updated} updated, {skippedDuplicates} already known, {requests} requests." (" via ..." omitted for old summaries without `provider`, falling back to the provider of this session's run). No run: "Not run yet." Always followed by "Also runs about once a week automatically. It does not run on the 3-hour refresh." Counts wrap at 900px, never truncate.
+Toasts (sonner) and the sr-only live region (`setAnnounce`): success `toast.success("Deep refresh done via {provider}", {description: "{inserted} new, {updated} updated ({requests} requests used)"})`, or description "No new jobs found" when 0 new and 0 updated; failure `toast.error("Deep refresh failed", {description: message})`; live region "Deep refresh complete via {provider}: ..." / "Deep refresh failed: ...". Keys are never in a toast.
+
+### 10.7 Deep-search jobs in the lists
+Same row design and density in New and Visited (3.2), no extra columns. In the `JobCell` meta line, after the company, a `Badge variant="outline" px-1.5 py-0 text-[11px] font-normal` `data-testid="via-badge"`:
+- **"via LinkedIn"** only when the job URL host is linkedin.com (any provider);
+- else **"via Google Jobs"** for SerpApi rows;
+- else **"via JSearch"** for JSearch rows.
+`title` is "Found through {provider}." (+ " Opens a LinkedIn page in your browser; you may need to sign in." for LinkedIn). The title button's sr-only text is "(opens LinkedIn in your browser, sign-in may be required)" for LinkedIn rows, "(opens in your browser)" otherwise. The sign-in caveat is not tooltip-only: it is in the explainer and (first LinkedIn open per session) the "Moved to Visited" toast description. These rows have no connector, so no per-company failure icon.
+
+
+### 10.8 States summary
+| State | UI |
+|---|---|
+| Status loading | Title + badge skeleton (`Skeleton h-5 w-12`), explainer visible, one `Skeleton h-8 w-full` in place of controls, `aria-busy="true"` on the section |
+| No keys | Badge "Off"; both sections show "No key" + form; no quota/alerts; Deep refresh disabled, hint "Add a key to use Deep refresh." |
+| JSearch key only, never run | "On: JSearch", quota 0 / 200, hint "Next run uses JSearch.", "Not run yet." |
+| SerpApi key only | "On: SerpApi", hint "Next run uses SerpApi (Google Jobs) because JSearch has no key." |
+| JSearch >= 170 and SerpApi usable | "On: SerpApi", hint "...because JSearch is near its monthly limit (N of 170 used)." |
+| One provider paused, other usable | Paused alert in that section; badge shows the serving provider |
+| Both paused, or one paused and the other at limit | Badge "Paused", run disabled, hint "Paused, see above." |
+| Both at limit | Badge "On", limit alerts, run disabled, hint "No search available: monthly limits reached. Available again {date}." |
+| Running | Button `aria-busy`, spinner, hint "Searching, this can take a minute."; status refetched on finish |
+| Status query error | Destructive `Alert` "Couldn't load Deep search status" + Retry (`refetch`); controls hidden |
+| Action error | `role="alert"` line + toast; controls remain |
+
+### 10.9 Accessibility, keyboard, theme, narrow widths
+- Landmark: `<section aria-labelledby>` per panel and per provider; `h3` then `h4`. Tab order: JSearch key input -> Save (or Replace/Remove) -> SerpApi key controls -> Deep refresh -> remaining Companies content. Control names must be unique across the two sections (the provider name is in the accessible name) and must contain their visible text (WCAG 2.5.3). Visual order equals DOM order. Enter in the key input submits the form. Every button uses the shared focus ring (section 5). The key input needs a visible `<label>` (not placeholder-only); all status/notice texts use `role="status"` (ok) or `role="alert"` (error) with stable container IDs referenced by `aria-describedby`, same as `add-company-notice`.
+- The password field must keep the dark border fix from section 5 (`border-input dark:border-white/30`). All colors via tokens; amber for warnings uses existing `score-possible-*` tokens; quota fill colors verified >= 3:1 against `bg-secondary` in both themes (non-text contrast), text >= 4.5:1.
+- Narrow (900px min): panel is full width, rows use `flex-wrap` so Save/Deep refresh drop below the input; input `min-w-[16rem] flex-1`; quota bar full width; the Alert text wraps. At <= 700px height the explainer stays visible (it is the consent text), the panel is not collapsed; the Companies wrapper scrolls.
+- Reduced motion: spinner and bar transitions gated with `motion-reduce:`.
+- Focus management: after Save (replace mode) or Cancel focus returns to `Replace {name} key`; after the first save (no key -> key) focus goes to `Replace {name} key`; after Remove focus goes to that provider's key input; opening the remove confirm moves focus to its `Remove` button.
+- `data-testid`s (JSearch uses `deepsearch-*`, SerpApi `deepsearch-serpapi-*`): `deepsearch`, `*-key-input`, `*-key-save`, `*-key-state`, `*-key-replace`, `*-key-remove`, `*-key-remove-confirm`, `*-quota`, `*-blocked`, `*-limit`, plus `deepsearch-run`, `deepsearch-last-run`, `via-badge`.
+
+### 10.10 Acceptance additions
+- [ ] No keys: badge "Off", both sections "No key" with `type=password` inputs, Deep refresh disabled with "Add a key to use Deep refresh."; saving a key shows "Key set" and the input value/DOM never contains the key afterwards (assert `input.value===''` and no text node with the key).
+- [ ] Remove key needs a confirm ("Saved jobs stay."); after it, "No key", quota hidden, saved jobs still listed.
+- [ ] Quota text reads "{used} / 200 this month" (JSearch) and "{used} / 250 this month" (SerpApi), taken from status; progressbars labelled "JSearch monthly requests" / "SerpApi monthly searches" have `aria-valuenow`/`aria-valuetext`.
+- [ ] Provider choice: JSearch only -> "Next run uses JSearch."; JSearch used 170 with SerpApi key -> "On: SerpApi" and the "because" hint; both limits reached -> "No search available..." and run disabled.
+- [ ] Deep refresh: button `aria-busy` and disabled while running, spinner stops under reduced motion, toast "Deep refresh done via {provider}" with counts; `ok:false` shows toast and `role="alert"`; last-run line reads "via {provider}" and a SerpApi run restarts the shared 7-day gate.
+- [ ] Paused: Alert "{name} is paused" with reason and re-enable date; limit: "{name}: monthly limit reached". Saving a different key lifts the pause but the counter stays.
+- [ ] A seeded deep-search job with a linkedin.com URL shows "via LinkedIn" in both New and Visited, same row height as other rows; a non-LinkedIn SerpApi row shows "via Google Jobs"; the open goes through `jobs:open` only (no `<a href>`).
+- [ ] axe 0 serious/critical on the Companies tab in light and dark at 900x600 and 1280x800 for every state in 10.8.

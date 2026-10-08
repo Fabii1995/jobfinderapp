@@ -33,6 +33,7 @@ Any schema migration must be idempotent, must never drop VISITED jobs, and must 
 - The app targets jobs located in Israel, on-site or hybrid. Remote-only jobs are excluded.
 - Sources are company career pages via ATS public endpoints (e.g. Comeet, Greenhouse, Lever, Ashby, Workday, SmartRecruiters) and any approved Israeli job boards.
 - Sources must not require paid keys.
+- Exception (user-approved 2026-10-08): the JSearch (OpenWebNinja) aggregator API, and SerpApi (Google Jobs engine) as its secondary fallback used only when JSearch is near its monthly limit or blocked, are approved, opt-in sources. Each is off unless the user supplies a free-tier key, and their results may link to LinkedIn pages. The app only stores those links and opens them in the user's browser; it must NEVER fetch or scrape LinkedIn, Indeed or Glassdoor itself.
 - Any API key a user supplies goes in the userData config only: never committed, never in the repo (including `training-data/examples.json`), and never logged.
 - Scraping that violates a site's terms of service or evades anti-bot measures is not allowed. No LinkedIn, Indeed, or Glassdoor scraping.
 

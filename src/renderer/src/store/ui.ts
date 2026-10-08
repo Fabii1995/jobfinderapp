@@ -17,6 +17,9 @@ interface UiState {
   dismissedBannerAt: number | null
   /** Text for the sr-only aria-live region. */
   announce: string
+  /** Session-only: the LinkedIn sign-in hint was already shown. */
+  linkedinHintShown: boolean
+  setLinkedinHintShown: () => void
   setActiveTab: (tab: ActiveTab) => void
   setSearch: (s: string) => void
   setCompany: (company: string | null) => void
@@ -41,6 +44,8 @@ export const useUiStore = create<UiState>()(
       refreshFailure: null,
       dismissedBannerAt: null,
       announce: '',
+      linkedinHintShown: false,
+      setLinkedinHintShown: () => set({ linkedinHintShown: true }),
       setActiveTab: (activeTab) => set({ activeTab }),
       setSearch: (search) => set({ search }),
       setCompany: (company) => set((s) => ({ filters: { ...s.filters, company } })),

@@ -7,6 +7,8 @@ import { registerCompaniesIpc } from './companiesIpc'
 import { setCompaniesConfigDir } from './companies/store'
 import { refreshJobs } from './ingest/refresh'
 import { createRefreshService } from './jobs/refreshService'
+import { createJSearchService } from './sources/jsearch'
+import { createDeepRunner, registerJSearchIpc } from './jsearchIpc'
 import { IPC } from '../shared/ipc'
 import { startScheduler } from './scheduler'
 import { registerRefreshShortcut } from './shortcuts'
@@ -86,19 +88,24 @@ app.whenReady().then(() => {
   const { db, close } = openDb(dbPath)
   console.log('[db] opened', dbPath)
   app.on('will-quit', close)
+  const notifyChanged = (): void => {
+    for (const w of BrowserWindow.getAllWindows()) {
+      if (!w.isDestroyed()) w.webContents.send(IPC.changed)
+    }
+  }
   // Single refresh entry point shared by the IPC handler and the scheduler.
   const refresh = createRefreshService({
     db,
     run: refreshJobs,
-    notify: () => {
-      for (const w of BrowserWindow.getAllWindows()) {
-        if (!w.isDestroyed()) w.webContents.send(IPC.changed)
-      }
-    }
+    notify: notifyChanged
   })
   registerJobsIpc({ db, refresh })
   registerCompaniesIpc({ db, dir: userData })
-  const stopScheduler = startScheduler(refresh)
+  // Optional JSearch deep search (inert without a user-supplied key). Not part of the 3h refresh.
+  const jsearch = createJSearchService({ userDataDir: userData, db })
+  const deepRunner = createDeepRunner(jsearch, notifyChanged)
+  registerJSearchIpc(jsearch, deepRunner)
+  const stopScheduler = startScheduler(refresh, { daily: () => deepRunner.maybeRunWeekly() })
   app.on('will-quit', stopScheduler)
 
   // Packaged builds have no default menu (File/Edit/View/...), which also removes

@@ -3,6 +3,7 @@ import { ExternalLink } from 'lucide-react'
 import { Badge } from '@renderer/components/ui/badge'
 import { ROLE_LABELS, type Job } from '@renderer/lib/types'
 import { WORK_MODE_LABEL } from '@renderer/lib/filters'
+import { isDeepSearchJob, isSerpapiJob, isLinkedInUrl } from '@renderer/lib/jsearch'
 import { toExcerpt } from '@renderer/lib/text'
 
 interface Props {
@@ -23,6 +24,9 @@ export function JobCell({ job, compact, onOpen }: Props): React.JSX.Element {
     if (job.workMode && job.workMode !== 'unknown') folded.push(WORK_MODE_LABEL[job.workMode] ?? job.workMode)
   }
   const roles = job.roles ?? []
+  const viaDeep = isDeepSearchJob(job)
+  const viaLinkedIn = viaDeep && isLinkedInUrl(job.url)
+  const providerLabel = isSerpapiJob(job) ? 'SerpApi (Google Jobs)' : 'JSearch'
 
   return (
     <div className="flex min-w-0 flex-col gap-1">
@@ -35,7 +39,11 @@ export function JobCell({ job, compact, onOpen }: Props): React.JSX.Element {
       >
         <span className="truncate">{job.title?.trim() || 'Untitled role'}</span>
         <ExternalLink className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
-        <span className="sr-only">(opens in your browser)</span>
+        <span className="sr-only">
+          {viaLinkedIn
+            ? '(opens LinkedIn in your browser, sign-in may be required)'
+            : '(opens in your browser)'}
+        </span>
       </button>
       <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-muted-foreground">
         <span className="max-w-full truncate font-medium text-foreground/80" title={meta[0]}>
@@ -47,6 +55,20 @@ export function JobCell({ job, compact, onOpen }: Props): React.JSX.Element {
             <span className="truncate">{f}</span>
           </span>
         ))}
+        {viaDeep && (
+          <Badge
+            variant="outline"
+            className="px-1.5 py-0 text-[11px] font-normal"
+            data-testid="via-badge"
+            title={
+              viaLinkedIn
+                ? `Found through ${providerLabel}. Opens a LinkedIn page in your browser; you may need to sign in.`
+                : `Found through ${providerLabel}.`
+            }
+          >
+            {viaLinkedIn ? 'via LinkedIn' : isSerpapiJob(job) ? 'via Google Jobs' : 'via JSearch'}
+          </Badge>
+        )}
         {roles.map((r) => (
           <Badge key={r} variant="outline" className="px-1.5 py-0 text-[11px] font-normal">
             {ROLE_LABELS[r] ?? r}

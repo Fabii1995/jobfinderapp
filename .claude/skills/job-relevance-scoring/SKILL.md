@@ -68,6 +68,10 @@ Company career pages via public ATS endpoints and one approved Israeli board (SQ
 ## SQLink connector (`sources/sqlink.ts`, id `sqlink`)
 
 Israeli tech recruiter. robots.txt allows `/` (only `/archive/` disallowed) and publishes `https://www.sqlink.com/sitemap/`; job pages are server-rendered HTML (no JSON endpoint, no JSON-LD). Its terms-of-use (תקנון שימוש) page could not be located, so no prohibition was found. The connector reads the sitemap once, keeps `/career/<cat>/<sub>/<slug>/` URLs modified within 90 days (old pages never disappear, `lastmod` is the only freshness signal), skips categories hardware/אלקטרוניקה/student, pre-filters on the decoded slug with `isHardRejectTitle` + `titleHasSoftwareRole`, fetches at most 150 pages sequentially >= 1 s apart, and throws on any 401/403/429/5xx or Cloudflare/CAPTCHA page (never retried or bypassed). Location: country `IL`, city only when an allowlisted city (Hebrew prefixes like ב/ל/מ accepted) appears in the first 400 chars, work mode `unknown` unless the text says hybrid/fully remote. `postedAt` = sitemap lastmod. Company is "SQLink" (clients are anonymous).
+## JSearch connector (`sources/jsearch/`, id `jsearch`)
+
+Opt-in aggregator (key in userData `config.json`), manual deep refresh or weekly, never the 3h cron; cap 150 requests/month. Same location filter and `scoreJob`/`MIN_SCORE`, plus two extra rules: postings older than 45 days (`job_posted_at_datetime_utc`) are dropped, and a real junior signal is required (junior/entry title keyword, or a strong/moderate junior description), so the bare no-experience baseline (30) does not keep a JSearch job. Titles are whitespace-collapsed; rows duplicating an ATS job on normalized title+company are skipped; known `job_id`s are not re-scored.
+
 ## Where the cut-off lives
 
 `MIN_SCORE = 30` in `src/main/ingest/refresh.ts`: one strong target-role title with no penalty, or a general software title plus a junior signal. Bare general titles with a stated non-junior requirement (20; with no requirement stated they get the baseline and sit at 30), role-less junior postings (<= 25), interns (<= 20) and senior titles (0) fall below.

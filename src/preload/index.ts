@@ -15,6 +15,14 @@ const api: JobFinderApi = {
     remove: (id) => ipcRenderer.invoke(IPC.companiesRemove, id),
     setEnabled: (id, enabled) => ipcRenderer.invoke(IPC.companiesSetEnabled, id, enabled)
   },
+  jsearch: {
+    status: () => ipcRenderer.invoke(IPC.jsearchStatus),
+    setKey: (key) => ipcRenderer.invoke(IPC.jsearchSetKey, key),
+    clearKey: () => ipcRenderer.invoke(IPC.jsearchClearKey),
+    setSerpapiKey: (key) => ipcRenderer.invoke(IPC.jsearchSetSerpapiKey, key),
+    clearSerpapiKey: () => ipcRenderer.invoke(IPC.jsearchClearSerpapiKey),
+    deepRefresh: () => ipcRenderer.invoke(IPC.jsearchDeepRefresh)
+  },
   onChanged: (cb) => {
     const listener = (): void => cb()
     ipcRenderer.on(IPC.changed, listener)

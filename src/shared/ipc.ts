@@ -1,5 +1,10 @@
 import type { Job } from '../main/db/schema'
 import type { Ats } from '../main/companies/types'
+import type {
+  JSearchRunResult,
+  JSearchSetKeyResult,
+  JSearchStatus
+} from './jsearch'
 
 export type { Job }
 
@@ -14,6 +19,12 @@ export const IPC = {
   companiesAdd: 'companies:add',
   companiesRemove: 'companies:remove',
   companiesSetEnabled: 'companies:setEnabled',
+  jsearchStatus: 'jsearch:status',
+  jsearchSetKey: 'jsearch:setKey',
+  jsearchClearKey: 'jsearch:clearKey',
+  jsearchSetSerpapiKey: 'jsearch:setSerpapiKey',
+  jsearchClearSerpapiKey: 'jsearch:clearSerpapiKey',
+  jsearchDeepRefresh: 'jsearch:deepRefresh',
   /** main -> renderer push: job data changed (a refresh finished, manual or scheduled). */
   changed: 'jobs:changed'
 } as const
@@ -107,6 +118,18 @@ export interface JobFinderApi {
     add(req: AddCompanyRequest): Promise<AddCompanyResponse>
     remove(id: string): Promise<CompanyMutationResponse>
     setEnabled(id: string, enabled: boolean): Promise<CompanyMutationResponse>
+  }
+  jsearch: {
+    /** Never includes the key. */
+    status(): Promise<JSearchStatus>
+    /** Validates + stores the key. Never echoes it; errors come back as { ok: false, error }. */
+    setKey(key: string): Promise<JSearchSetKeyResult>
+    clearKey(): Promise<{ ok: true }>
+    /** SerpApi (Google Jobs) fallback key. Same contract as setKey/clearKey; never echoed. */
+    setSerpapiKey(key: string): Promise<JSearchSetKeyResult>
+    clearSerpapiKey(): Promise<{ ok: true }>
+    /** Manual deep refresh (spends API quota). Concurrent calls share one run. */
+    deepRefresh(): Promise<JSearchRunResult>
   }
   /** Subscribe to `jobs:changed` pushes. Returns an unsubscribe function. */
   onChanged(cb: () => void): () => void

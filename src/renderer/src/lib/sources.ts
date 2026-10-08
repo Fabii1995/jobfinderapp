@@ -21,6 +21,8 @@ export function atsLabel(ats: Ats): string {
  * with a capitalised ATS prefix.
  */
 export function sourceLabel(source: string, names?: Record<string, string>): string {
+  if (source.startsWith('jsearch')) return 'JSearch'
+  if (source.startsWith('serpapi')) return 'SerpApi'
   const known = names?.[source]
   if (known) return known
   const i = source.indexOf(':')
