@@ -311,7 +311,7 @@ describe('serpapi: no key', () => {
 })
 
 describe('serpapi: request shape and counter', () => {
-  it('sends 4 GET requests, one per query, engine google_jobs, location Israel; counter persists', async () => {
+  it('sends 4 GET requests, one per query, engine google_jobs, no location/gl; counter persists', async () => {
     const svc = mk()
     svc.setSerpapiKey(SPKEY)
     const st0 = svc.getStatus()
@@ -329,7 +329,10 @@ describe('serpapi: request shape and counter', () => {
       const u = new URL(url)
       expect(u.origin + u.pathname).toBe('https://serpapi.com/search.json')
       expect(u.searchParams.get('engine')).toBe('google_jobs')
-      expect(u.searchParams.get('location')).toBe('Israel')
+      expect(u.searchParams.get('location')).toBeNull()
+      expect(u.searchParams.get('gl')).toBeNull()
+      expect(u.searchParams.get('hl')).toBe('en')
+      expect(u.searchParams.get('q')).toMatch(/ Israel$/)
       expect(u.searchParams.get('api_key')).toBe(SPKEY)
       expect(init.method).toBe('GET')
       qs.push(u.searchParams.get('q')!)
@@ -477,7 +480,7 @@ describe('serpapi: API-error blocks', () => {
       const st = svc.getStatus().serpapi
       expect(st.blocked).toBe(true)
       expect(st.blockedUntil).toBe(new Date(Date.UTC(2026, 10, 1)).toISOString())
-      expect(st.used).toBe(1)
+      expect(st.used).toBe(status === 429 ? 1 : 0) // 4xx except 429 is refunded
       expect(JSON.stringify(svc.getStatus()) + r.message).not.toContain(SPKEY)
 
       const again = mk()
@@ -559,7 +562,7 @@ describe('serpapi: API-error blocks', () => {
     const st = svc.getStatus().serpapi
     expect(st.blocked).toBe(false)
     expect(st.blockedReason).toBeNull()
-    expect(st.used).toBe(1)
+    expect(st.used).toBe(0) // 401 was refunded
   })
 
   it('a SerpApi key change does not lift a JSearch block (and vice versa)', async () => {

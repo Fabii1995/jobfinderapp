@@ -25,7 +25,7 @@ const SEEN_TTL_MS = 90 * 24 * 3600 * 1000
 const SEEN_MAX = 3000
 const MIN_KEY_LEN = 8
 const MAX_KEY_LEN = 512
-const SERPAPI_LOCATION = 'Israel'
+const ERR_TEXT_MAX = 200
 const TIMEOUT_MS = 25_000
 
 /** Exactly one page (one credit) each. Order = priority; the run stops early if the cap would be exceeded. */
@@ -36,12 +36,18 @@ export const QUERIES = [
   'entry level software engineer in Israel'
 ]
 
-/** One search per query (one request, no pagination); location=Israel is sent as a parameter. */
+/**
+ * One search per query (one request, no pagination). Israel is part of the query text; no `location`/`gl` params.
+ * UNVERIFIED BEST GUESS: the first real run got a bare HTTP 400 and we could not see SerpApi's error body. The
+ * likeliest cause is the `location=Israel` / `gl=il` combination being rejected for the google_jobs engine, so the
+ * request is reduced to the minimal param set (engine, q, hl, api_key). If it still fails, the SerpApi `error`
+ * text is now surfaced in the run message and should confirm or refute this guess.
+ */
 export const SERPAPI_QUERIES = [
-  'junior backend developer',
-  'junior QA engineer',
-  'junior python developer',
-  'entry level software engineer'
+  'junior backend developer Israel',
+  'junior QA engineer Israel',
+  'junior python developer Israel',
+  'entry level software engineer Israel'
 ]
 
 export interface ProviderAvailability {
@@ -69,7 +75,7 @@ export function selectProvider(
 export type FetchLike = (
   url: string,
   init: { method: string; headers: Record<string, string>; signal?: AbortSignal }
-) => Promise<{ ok: boolean; status: number; json(): Promise<unknown> }>
+) => Promise<{ ok: boolean; status: number; json(): Promise<unknown>; text?(): Promise<string> }>
 
 export interface JSearchServiceOptions {
   /** Electron userData directory: holds config.json (key) and jsearch-state.json. */
@@ -362,11 +368,12 @@ export function createJSearchService(opts: JSearchServiceOptions) {
       saveState(statePath, s)
       let status = 0
       let body: unknown = null
+      let errDetail = ''
       try {
         const req: { url: string; headers: Record<string, string> } =
           p === 'serpapi'
             ? {
-                url: `${SERPAPI_URL}?${new URLSearchParams({ engine: 'google_jobs', q, location: SERPAPI_LOCATION, gl: 'il', hl: 'en', api_key: key })}`,
+                url: `${SERPAPI_URL}?${new URLSearchParams({ engine: 'google_jobs', q, hl: 'en', api_key: key })}`,
                 headers: { Accept: 'application/json' }
               }
             : {
@@ -380,21 +387,32 @@ export function createJSearchService(opts: JSearchServiceOptions) {
         })
         status = res.status
         if (res.ok) body = await res.json()
+        else errDetail = await readErrorDetail(res)
       } catch {
         stopNote = ' A request failed (network error); stopped.'
         failed = true
         break
       }
+      // A definite client error (4xx except 429): the provider rejected the request without running a search, so
+      // refund the pre-counted request. Network errors, timeouts, 5xx, 429 and 200 stay counted.
+      if (status >= 400 && status < 500 && status !== 429) {
+        s.used = Math.max(0, s.used - 1)
+        summary.requests = Math.max(0, summary.requests - 1)
+        saveState(statePath, s)
+      }
+      const detail = errDetail ? ` Details: ${errDetail}` : ''
       if (status === 401 || status === 403 || status === 429) {
         block(
-          status === 429
+          (status === 429
             ? `${label} reported the request limit was reached (HTTP 429). Disabled until next month.`
-            : `${label} rejected the API key (HTTP ${status}). Disabled until next month or until a new key is saved.`
+            : `${label} rejected the API key (HTTP ${status}). Disabled until next month or until a new key is saved.`) +
+            detail
         )
         break
       }
+      // Other non-2xx (400/404/422/5xx) never block the provider; the run just stops.
       if (status < 200 || status >= 300) {
-        stopNote = ` A request failed (HTTP ${status}); stopped.`
+        stopNote = ` A request failed (HTTP ${status}); stopped.${detail}`
         failed = true
         break
       }
@@ -410,7 +428,8 @@ export function createJSearchService(opts: JSearchServiceOptions) {
           break
         }
         if (out.kind === 'error') {
-          stopNote = ' SerpApi returned an error; stopped.'
+          const e = bodyErrorText(body)
+          stopNote = ` SerpApi returned an error; stopped.${e ? ` Details: ${e}` : ''}`
           failed = true
           break
         }
@@ -474,6 +493,35 @@ export function createJSearchService(opts: JSearchServiceOptions) {
     return msg
       .replace(/(x-api-key["']?\s*[:=]\s*)\S+/gi, '$1***')
       .replace(/(api_key["']?\s*[:=]\s*)[^&\s"']+/gi, '$1***')
+  }
+
+  /** Pulls `error` (or `message`) from a parsed body; scrubbed, whitespace-collapsed, truncated. '' when absent. */
+  function bodyErrorText(body: unknown): string {
+    const rec = asRecord(body)
+    const raw = typeof rec?.error === 'string' ? rec.error : typeof rec?.message === 'string' ? rec.message : ''
+    return clean(raw)
+  }
+
+  function clean(raw: string): string {
+    const t = scrub(raw).replace(/\s+/g, ' ').trim()
+    return t.length > ERR_TEXT_MAX ? `${t.slice(0, ERR_TEXT_MAX)}...` : t
+  }
+
+  /** Best-effort read of a non-2xx response body. Never throws. Falls back to scrubbed plain text. */
+  async function readErrorDetail(res: { json(): Promise<unknown>; text?(): Promise<string> }): Promise<string> {
+    try {
+      if (typeof res.text === 'function') {
+        const txt = await res.text()
+        try {
+          return bodyErrorText(JSON.parse(txt)) || (/^\s*[{[]/.test(txt) ? '' : clean(txt))
+        } catch {
+          return clean(txt)
+        }
+      }
+      return bodyErrorText(await res.json())
+    } catch {
+      return ''
+    }
   }
 
   function guarded(label: string, fn: () => Promise<JSearchRunResult>): Promise<JSearchRunResult> {

@@ -170,7 +170,7 @@ describe('jsearch: API-error blocks', () => {
       const st = svc.getStatus()
       expect(st.blocked).toBe(true)
       expect(st.blockedUntil).toBe(iso(Date.UTC(2026, 10, 1)))
-      expect(st.used).toBe(1)
+      expect(st.used).toBe(status === 429 ? 1 : 0) // 4xx except 429 is refunded
       expect(JSON.stringify(st) + r.message).not.toContain(KEY)
 
       const again = mk() // new instance
@@ -196,7 +196,7 @@ describe('jsearch: API-error blocks', () => {
     const st = svc.getStatus()
     expect(st.blocked).toBe(false)
     expect(st.blockedReason).toBeNull()
-    expect(st.used).toBe(1)
+    expect(st.used).toBe(0) // 401 was refunded
   })
 
   it('429 (backend choice, see report): a different key also lifts the block', async () => {
