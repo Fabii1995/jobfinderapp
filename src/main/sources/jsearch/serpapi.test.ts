@@ -311,7 +311,7 @@ describe('serpapi: no key', () => {
 })
 
 describe('serpapi: request shape and counter', () => {
-  it('sends 4 GET requests, one per query, engine google_jobs, no location/gl; counter persists', async () => {
+  it('sends 4 GET requests, one per query, engine google_jobs, location Israel, no gl; counter persists', async () => {
     const svc = mk()
     svc.setSerpapiKey(SPKEY)
     const st0 = svc.getStatus()
@@ -329,10 +329,10 @@ describe('serpapi: request shape and counter', () => {
       const u = new URL(url)
       expect(u.origin + u.pathname).toBe('https://serpapi.com/search.json')
       expect(u.searchParams.get('engine')).toBe('google_jobs')
-      expect(u.searchParams.get('location')).toBeNull()
+      expect(u.searchParams.get('location')).toBe('Israel')
       expect(u.searchParams.get('gl')).toBeNull()
       expect(u.searchParams.get('hl')).toBe('en')
-      expect(u.searchParams.get('q')).toMatch(/ Israel$/)
+      expect(u.searchParams.get('q')).not.toMatch(/Israel/i)
       expect(u.searchParams.get('api_key')).toBe(SPKEY)
       expect(init.method).toBe('GET')
       qs.push(u.searchParams.get('q')!)
@@ -539,7 +539,7 @@ describe('serpapi: API-error blocks', () => {
     expect(svc.getStatus().serpapi.blocked).toBe(false)
   })
 
-  it('HTTP 500 and network errors stop without blocking; counter still counts the request', async () => {
+  it('HTTP 500 stops and network errors are skipped, neither blocks; counter still counts every request', async () => {
     const svc = mk()
     svc.setSerpapiKey(SPKEY)
     fetchMock.mockResolvedValueOnce(errResp(500))
@@ -548,7 +548,7 @@ describe('serpapi: API-error blocks', () => {
     fetchMock.mockReset().mockRejectedValue(new Error('ECONNRESET'))
     expect((await svc.runDeepRefresh()).ok).toBe(false)
     expect(svc.getStatus().serpapi.blocked).toBe(false)
-    expect(svc.getStatus().serpapi.used).toBe(2)
+    expect(svc.getStatus().serpapi.used).toBe(1 + SERPAPI_QUERIES.length) // 500 stopped after 1; network error tried all 4
   })
 
   it('saving a DIFFERENT key lifts the block (counter kept); the same key does not', async () => {

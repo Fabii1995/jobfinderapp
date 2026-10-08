@@ -50,10 +50,10 @@ function spSvc(body: unknown): ReturnType<typeof createJSearchService> {
 describe('SERPAPI_QUERIES and request shape', () => {
   it('is pinned to the 4 agreed queries', () => {
     expect(SERPAPI_QUERIES).toEqual([
-      'junior software developer Israel',
-      'junior QA engineer Israel',
-      'entry level backend developer Israel',
-      'junior python developer Israel'
+      'junior software developer',
+      'junior QA engineer',
+      'entry level backend developer',
+      'junior python developer'
     ])
   })
 
@@ -67,7 +67,7 @@ describe('SERPAPI_QUERIES and request shape', () => {
       expect(u.origin + u.pathname).toBe('https://serpapi.com/search.json')
       expect(u.searchParams.get('engine')).toBe('google_jobs')
       expect(u.searchParams.get('api_key')).toBe(SPKEY)
-      expect(u.searchParams.has('location')).toBe(false)
+      expect(u.searchParams.get('location')).toBe('Israel')
       expect(u.searchParams.has('gl')).toBe(false)
     }
   })

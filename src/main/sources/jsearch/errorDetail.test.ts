@@ -169,11 +169,12 @@ for (const p of provs) {
     it('network error stays counted and is not blocked', async () => {
       const svc = mk()
       p.setup(svc)
-      fetchMock.mockRejectedValueOnce(new Error('ECONNRESET'))
+      fetchMock.mockRejectedValue(new Error('ECONNRESET'))
       const r = await svc.runDeepRefresh()
       expect(r.ok).toBe(false)
       expect(p.blocked(svc)).toBe(false)
-      expect(p.used(svc)).toBe(1)
+      // JSearch stops on the first network error; SerpApi skips it and tries every query (all counted).
+      expect(p.used(svc)).toBe(p.name === 'jsearch' ? 1 : SERPAPI_QUERIES.length)
     })
 
     it('long error is truncated to 200 chars plus "..."', async () => {
@@ -181,7 +182,9 @@ for (const p of provs) {
       p.setup(svc)
       fetchMock.mockResolvedValueOnce(bodyResp(400, { error: 'x'.repeat(500) }))
       const r = await svc.runDeepRefresh()
-      expect(r.message.split('Details: ')[1]).toBe(`${'x'.repeat(200)}...`)
+      // SerpApi 400s append a " (params sent: ...)" hint after the details.
+      expect(r.message.split('Details: ')[1].startsWith(`${'x'.repeat(200)}...`)).toBe(true)
+      expect(r.message).not.toContain('x'.repeat(201))
     })
 
     it('error body containing the key / api_key= / x-api-key is scrubbed', async () => {
@@ -240,7 +243,7 @@ describe('serpapi: 200-body error details and request URL', () => {
     })
   }
 
-  it('URL has exactly engine, q, hl, api_key: no location, no gl; queries end with " Israel"', async () => {
+  it('URL has exactly engine, q, location, hl, api_key: no gl; queries carry no "Israel"', async () => {
     const svc = mk()
     svc.setSerpapiKey(SPKEY)
     fetchMock.mockResolvedValue(okJson({ jobs_results: [] }))
@@ -248,14 +251,15 @@ describe('serpapi: 200-body error details and request URL', () => {
     expect(fetchMock).toHaveBeenCalledTimes(SERPAPI_QUERIES.length)
     for (const [url] of fetchMock.mock.calls) {
       const u = new URL(url)
-      expect([...u.searchParams.keys()].sort()).toEqual(['api_key', 'engine', 'hl', 'q'])
+      expect([...u.searchParams.keys()].sort()).toEqual(['api_key', 'engine', 'hl', 'location', 'q'])
       expect(u.searchParams.get('engine')).toBe('google_jobs')
       expect(u.searchParams.get('hl')).toBe('en')
       expect(u.searchParams.get('api_key')).toBe(SPKEY)
-      expect(u.searchParams.get('q')).toMatch(/ Israel$/)
-      expect(url).not.toMatch(/location=|gl=/)
+      expect(u.searchParams.get('location')).toBe('Israel')
+      expect(u.searchParams.get('q')).not.toMatch(/Israel/i)
+      expect(url).not.toMatch(/[?&]gl=/)
     }
-    expect(SERPAPI_QUERIES.every((q) => q.endsWith(' Israel'))).toBe(true)
+    expect(SERPAPI_QUERIES.some((q) => /Israel/i.test(q))).toBe(false)
   })
 
   it('refund is floored at 0', async () => {

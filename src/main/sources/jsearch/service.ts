@@ -27,6 +27,8 @@ const MIN_KEY_LEN = 8
 const MAX_KEY_LEN = 512
 const ERR_TEXT_MAX = 200
 const TIMEOUT_MS = 25_000
+/** SerpApi google_jobs can be slow (a live run timed out at 25 s), so it gets a longer per-request timeout. */
+export const SERPAPI_TIMEOUT_MS = 45_000
 
 /** Exactly one page (one credit) each. Order = priority; the run stops early if the cap would be exceeded. */
 export const QUERIES = [
@@ -37,19 +39,21 @@ export const QUERIES = [
 ]
 
 /**
- * One search per query (one request, no pagination). Israel is part of the query text; no `location`/`gl` params.
- * UNVERIFIED BEST GUESS: the first real run got a bare HTTP 400 and we could not see SerpApi's error body. The
- * likeliest cause was the `location=Israel` / `gl=il` combination being rejected for the google_jobs engine, so the
- * request is the minimal param set (engine, q, hl, api_key). That fixed the 400 (UNVERIFIED reason), but the next
- * run returned HTTP 200 with zero rows for the narrower queries. These broader queries are an UNVERIFIED guess that
- * Google Jobs returns more for generic phrasing; zero-row responses are now diagnosed in the run message.
+ * One search per query (one request, no pagination). Queries carry no country word; Israel comes from `location`.
+ * UNTESTED GUESS: `location=Israel` (and deliberately NO `gl`). A live run with only q="... Israel" returned HTTP 200
+ * with "Google hasn't returned any results" for every query, so the hypothesis is that google_jobs needs a valid
+ * `location`. An earlier attempt with location=Israel&gl=il got HTTP 400 (reason never seen; 400 Details now show the
+ * error text and the offending param when SerpApi names it). If this still returns nothing or 400s, revisit.
  */
 export const SERPAPI_QUERIES = [
-  'junior software developer Israel',
-  'junior QA engineer Israel',
-  'entry level backend developer Israel',
-  'junior python developer Israel'
+  'junior software developer',
+  'junior QA engineer',
+  'entry level backend developer',
+  'junior python developer'
 ]
+/** Fixed SerpApi location param (untested guess, see SERPAPI_QUERIES). */
+export const SERPAPI_LOCATION = 'Israel'
+const SERPAPI_PARAM_NAMES = ['engine', 'q', 'location', 'gl', 'hl']
 
 export interface ProviderAvailability {
   configured: boolean
@@ -364,6 +368,7 @@ export function createJSearchService(opts: JSearchServiceOptions) {
 
     const emptyNotes = new Map<string, number[]>()
     let qIndex = 0
+    let netFailed = 0
     for (const q of queries) {
       qIndex++
       if (s.used >= cap) {
@@ -381,7 +386,7 @@ export function createJSearchService(opts: JSearchServiceOptions) {
         const req: { url: string; headers: Record<string, string> } =
           p === 'serpapi'
             ? {
-                url: `${SERPAPI_URL}?${new URLSearchParams({ engine: 'google_jobs', q, hl: 'en', api_key: key })}`,
+                url: `${SERPAPI_URL}?${new URLSearchParams({ engine: 'google_jobs', q, location: SERPAPI_LOCATION, hl: 'en', api_key: key })}`,
                 headers: { Accept: 'application/json' }
               }
             : {
@@ -391,12 +396,17 @@ export function createJSearchService(opts: JSearchServiceOptions) {
         const res = await fetchImpl(req.url, {
           method: 'GET',
           headers: req.headers,
-          signal: AbortSignal.timeout(TIMEOUT_MS)
+          signal: AbortSignal.timeout(p === 'serpapi' ? SERPAPI_TIMEOUT_MS : TIMEOUT_MS)
         })
         status = res.status
         if (res.ok) body = await res.json()
         else errDetail = await readErrorDetail(res)
       } catch {
+        if (p === 'serpapi') {
+          // Network error/timeout on one query: the request stays counted (quota may be consumed); keep going.
+          netFailed++
+          continue
+        }
         stopNote = ' A request failed (network error); stopped.'
         failed = true
         break
@@ -408,7 +418,12 @@ export function createJSearchService(opts: JSearchServiceOptions) {
         summary.requests = Math.max(0, summary.requests - 1)
         saveState(statePath, s)
       }
-      const detail = errDetail ? ` Details: ${errDetail}` : ''
+      let detail = errDetail ? ` Details: ${errDetail}` : ''
+      if (p === 'serpapi' && status === 400) {
+        const named = SERPAPI_PARAM_NAMES.filter((n) => new RegExp(`(^|[^a-z_])${n}([^a-z_]|$)`, 'i').test(errDetail))
+        const sent = `engine, q, location, hl`
+        detail += named.length ? ` Offending param named by SerpApi: ${named.join(', ')} (sent: ${sent}).` : ` (params sent: ${sent}).`
+      }
       if (status === 401 || status === 403 || status === 429) {
         block(
           (status === 429
@@ -470,6 +485,10 @@ export function createJSearchService(opts: JSearchServiceOptions) {
       }
     }
 
+    if (netFailed > 0) {
+      stopNote += ` ${netFailed} of ${summary.requests} request(s) failed (network error or timeout) and were skipped.`
+      if (netFailed === summary.requests) failed = true
+    }
     for (const [note, idx] of emptyNotes) stopNote += ` [q${idx.join(',q')}: ${note}]`
     summary.kept = rows.length
     if (rows.length > 0) {
