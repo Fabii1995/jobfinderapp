@@ -39,15 +39,16 @@ export const QUERIES = [
 /**
  * One search per query (one request, no pagination). Israel is part of the query text; no `location`/`gl` params.
  * UNVERIFIED BEST GUESS: the first real run got a bare HTTP 400 and we could not see SerpApi's error body. The
- * likeliest cause is the `location=Israel` / `gl=il` combination being rejected for the google_jobs engine, so the
- * request is reduced to the minimal param set (engine, q, hl, api_key). If it still fails, the SerpApi `error`
- * text is now surfaced in the run message and should confirm or refute this guess.
+ * likeliest cause was the `location=Israel` / `gl=il` combination being rejected for the google_jobs engine, so the
+ * request is the minimal param set (engine, q, hl, api_key). That fixed the 400 (UNVERIFIED reason), but the next
+ * run returned HTTP 200 with zero rows for the narrower queries. These broader queries are an UNVERIFIED guess that
+ * Google Jobs returns more for generic phrasing; zero-row responses are now diagnosed in the run message.
  */
 export const SERPAPI_QUERIES = [
-  'junior backend developer Israel',
+  'junior software developer Israel',
   'junior QA engineer Israel',
-  'junior python developer Israel',
-  'entry level software engineer Israel'
+  'entry level backend developer Israel',
+  'junior python developer Israel'
 ]
 
 export interface ProviderAvailability {
@@ -132,7 +133,11 @@ export function interpretSerpapiBody(body: unknown): SerpOutcome {
     if (/out of searches|run out|searches per|limit|quota|exceed|plan/i.test(err)) return { kind: 'exhausted' }
     return { kind: 'error' }
   }
-  return { kind: 'rows', rows: asArray(rec?.jobs_results) }
+  // Tolerant of shape variants: the first recognized job array wins (jobs_results is the documented one).
+  for (const k of ['jobs_results', 'jobs', 'results']) {
+    if (Array.isArray(rec?.[k])) return { kind: 'rows', rows: rec[k] as unknown[] }
+  }
+  return { kind: 'rows', rows: [] }
 }
 
 function readJson(path: string): Record<string, unknown> | null {
@@ -357,7 +362,10 @@ export function createJSearchService(opts: JSearchServiceOptions) {
       failed = true
     }
 
+    const emptyNotes = new Map<string, number[]>()
+    let qIndex = 0
     for (const q of queries) {
+      qIndex++
       if (s.used >= cap) {
         stopNote = ' Stopped early: monthly limit reached.'
         break
@@ -434,9 +442,11 @@ export function createJSearchService(opts: JSearchServiceOptions) {
           break
         }
         items = out.kind === 'rows' ? out.rows : []
+        if (items.length === 0) addEmptyNote(emptyNotes, qIndex, body, out.kind === 'empty')
       } else {
         const rec = asRecord(body)
         items = Array.isArray(rec?.data) ? rec.data : asArray(asRecord(rec?.data)?.jobs)
+        if (items.length === 0) addEmptyNote(emptyNotes, qIndex, body, false)
       }
       for (const item of items) {
         summary.fetched++
@@ -460,6 +470,7 @@ export function createJSearchService(opts: JSearchServiceOptions) {
       }
     }
 
+    for (const [note, idx] of emptyNotes) stopNote += ` [q${idx.join(',q')}: ${note}]`
     summary.kept = rows.length
     if (rows.length > 0) {
       const { inserted, updated } = upsertJobs(opts.db, rows)
@@ -500,6 +511,30 @@ export function createJSearchService(opts: JSearchServiceOptions) {
     const rec = asRecord(body)
     const raw = typeof rec?.error === 'string' ? rec.error : typeof rec?.message === 'string' ? rec.message : ''
     return clean(raw)
+  }
+
+  /**
+   * Records a safe note for a 200 response that parsed to zero rows: sorted top-level key names (max 15, 40 chars
+   * each), search_metadata.status and the `error` text only. Never job content. Identical notes are grouped by
+   * 1-based query number.
+   */
+  function addEmptyNote(notes: Map<string, number[]>, qIdx: number, body: unknown, normalEmpty: boolean): void {
+    const rec = asRecord(body)
+    const keys = rec ? Object.keys(rec).sort() : []
+    const shown = keys.slice(0, 15).map((k) => clean(k.slice(0, 40)))
+    const more = keys.length > 15 ? ` +${keys.length - 15} more` : ''
+    const st = asRecord(rec?.search_metadata)?.status
+    const err = bodyErrorText(body)
+    const parts = [
+      normalEmpty ? '0 results for this query (normal empty result, not a failure)' : '0 rows parsed',
+      rec ? `keys: ${shown.join(', ') || '(none)'}${more}` : 'body is not a JSON object'
+    ]
+    if (typeof st === 'string') parts.push(`status: ${clean(st.slice(0, 40))}`)
+    if (err) parts.push(`error: ${err}`)
+    const note = parts.join('; ')
+    const list = notes.get(note)
+    if (list) list.push(qIdx)
+    else notes.set(note, [qIdx])
   }
 
   function clean(raw: string): string {

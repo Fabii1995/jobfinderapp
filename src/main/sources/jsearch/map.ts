@@ -137,18 +137,53 @@ export function serpapiJobId(row: unknown): string | null {
   if (!r) return null
   const id = asString(r.job_id)
   if (id) return id
-  const title = cleanTitle(r.title)
+  const title = serpapiTitle(r)
   if (!title) return null
-  const co = asString(r.company_name) ?? ''
-  const loc = asString(r.location) ?? ''
+  const co = serpapiCompanyRaw(r) ?? ''
+  const loc = serpapiLocationRaw(r) ?? ''
   return `h:${hash(`${title.toLowerCase()}|${co.toLowerCase()}|${loc.toLowerCase()}`)}`
 }
 
-/** First apply link (http/https only), else a related link. */
+/** First non-empty string among the candidate values (non-strings are ignored). */
+function firstString(...vals: unknown[]): string | null {
+  for (const v of vals) {
+    const s = asString(v)
+    if (s) return s
+  }
+  return null
+}
+
+const serpapiTitle = (r: Record<string, unknown>): string => cleanTitle(firstString(r.title, r.job_title))
+const serpapiCompanyRaw = (r: Record<string, unknown>): string | null => firstString(r.company_name, r.company)
+const serpapiLocationRaw = (r: Record<string, unknown>): string | null => firstString(r.location, r.job_location)
+
+/** Description: description/snippet/job_description, plus any job_highlights text joined on. */
+function serpapiDescription(r: Record<string, unknown>): string | null {
+  const parts: string[] = []
+  const main = firstString(r.description, r.snippet, r.job_description)
+  if (main) parts.push(main)
+  for (const h of asArray(r.job_highlights)) {
+    const hr = asRecord(h)
+    if (!hr) continue
+    const t = asString(hr.title)
+    if (t) parts.push(t)
+    for (const it of asArray(hr.items)) {
+      const s = asString(it)
+      if (s) parts.push(s)
+    }
+  }
+  return parts.length > 0 ? parts.join('\n') : null
+}
+
+/** First apply link (http/https only): apply_options, then share/link fields, related links, apply_link. */
 function serpapiLink(r: Record<string, unknown>): string | null {
   const cands: unknown[] = [
     ...asArray(r.apply_options).map((o) => asRecord(o)?.link),
-    ...asArray(r.related_links).map((o) => asRecord(o)?.link)
+    r.share_link,
+    r.share_url,
+    r.link,
+    ...asArray(r.related_links).map((o) => asRecord(o)?.link),
+    r.apply_link
   ]
   for (const c of cands) {
     const s = asString(c)
@@ -162,28 +197,28 @@ export function mapSerpapiRow(row: unknown, nowMs: number): MapOutcome {
   const r = asRecord(row)
   if (!r) return { kind: 'drop', reason: 'invalid' }
   const id = serpapiJobId(r)
-  const title = cleanTitle(r.title)
+  const title = serpapiTitle(r)
   const link = serpapiLink(r)
   if (!id || !title || !link) return { kind: 'drop', reason: 'invalid' }
 
   const ext = asRecord(r.detected_extensions)
-  const age = parseRelativeAgeMs(ext?.posted_at)
+  const age = parseRelativeAgeMs(firstString(ext?.posted_at, ext?.posted, r.posted_at))
   if (age !== null && age > MAX_AGE_MS) return { kind: 'drop', reason: 'old' }
   const postedAt = age === null ? null : nowMs - age
 
-  const locText = stripHtml(asString(r.location) ?? '').replace(/\s+/g, ' ').trim()
+  const locText = stripHtml(serpapiLocationRaw(r) ?? '').replace(/\s+/g, ' ').trim()
   const loc = normalizeLocation({
     location: locText || null,
     country: null,
     city: null,
     isRemote: ext?.work_from_home === true ? true : null
   })
-  const desc = asString(r.description)
+  const desc = serpapiDescription(r)
   return finalizeJob({
     source: SERPAPI_SOURCE,
     externalId: id,
     title,
-    company: stripHtml(asString(r.company_name) ?? '').replace(/\s+/g, ' ').trim() || 'Unknown',
+    company: stripHtml(serpapiCompanyRaw(r) ?? '').replace(/\s+/g, ' ').trim() || 'Unknown',
     url: link,
     description: desc ? stripHtml(desc) : null,
     location: locText || null,
