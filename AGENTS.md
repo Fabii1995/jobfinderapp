@@ -9,7 +9,10 @@ Electron (electron-vite, react-ts) + React + TypeScript + Tailwind v4 + shadcn/u
 ## Layout
 
 - `src/main/` - Electron main process: DB, IPC handlers, sources, scoring, scheduler.
+- `src/main/sources/` - one connector per ATS (Greenhouse, Lever, Comeet, Ashby, SmartRecruiters, Workday, Amazon, SQLink). `sources/jsearch/` is the opt-in "Deep search" service (JSearch, with SerpApi as fallback); its IPC is `src/main/jsearchIpc.ts`, shared types `src/shared/jsearch.ts`.
+- `src/main/ingest/` - refresh pipeline; `ingest/constants.ts` holds `MIN_SCORE`.
 - `src/main/examples/` - intake/report logic behind `examples:add` and `examples:report`.
+- userData (`%APPDATA%\job-finder`): `jobfinder.db`, `companies.json`, and for Deep search `config.json` (optional `jsearchApiKey` / `serpapiApiKey`, never in the repo) plus the quota counters `jsearch-state.json` / `serpapi-state.json`.
 - `src/shared/` - types and constants shared by main, preload and renderer (IPC contract, roles).
 - `src/preload/` - contextBridge API exposed to the renderer (typed IPC).
 - `src/renderer/src/` - React UI. Alias `@renderer/*`. shadcn components in `components/ui/`, Zustand store in `store/`.

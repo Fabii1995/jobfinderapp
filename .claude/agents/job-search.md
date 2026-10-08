@@ -19,7 +19,7 @@ Renderer, IPC, preload, DB schema/queries, packaging (frontend); tests (test age
 
 ## Must respect
 
-- Israel-only, on-site or hybrid; no paid keys; no LinkedIn/Indeed/Glassdoor; no ToS-violating scraping or anti-bot evasion (RULES.md).
+- Israel-only, on-site or hybrid; no paid keys (only the opt-in JSearch/SerpApi exception in RULES.md); no LinkedIn/Indeed/Glassdoor; no ToS-violating scraping or anti-bot evasion (RULES.md).
 - The upsert update branch must never write `visitedAt` or `firstSeenAt`; keep that structurally impossible.
 - Untrusted text goes through `stripHtml`. Keys go only in the userData config.
 - Kill only your own Electron process; do not create accounts or obtain API keys, ask the user.

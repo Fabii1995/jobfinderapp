@@ -9,7 +9,7 @@ npm install
 npm run dev     # launches the Electron app with HMR
 ```
 
-Jobs come from company career pages via public ATS endpoints (Greenhouse, Lever, Comeet, Ashby, SmartRecruiters, Workday, Amazon) plus SQLink (seeded off by default, blocked by Cloudflare). No API keys are needed. Click Refresh, or wait for the automatic refresh every 3 hours while the app is running. Manage the company list in the Companies tab (paste a careers-page URL to add one).
+Jobs come from company career pages via public ATS endpoints (Greenhouse, Lever, Comeet, Ashby, SmartRecruiters, Workday, Amazon) plus SQLink (seeded off by default, blocked by Cloudflare). No API keys are needed for these. An optional "Deep search" (JSearch, with SerpApi as fallback) is off until you enter a free-tier key in the Companies tab. Click Refresh, or wait for the automatic refresh every 3 hours while the app is running. Manage the company list in the Companies tab (paste a careers-page URL to add one).
 
 Windows installer: `npm run dist` writes it to `release/`.
 

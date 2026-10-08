@@ -9,7 +9,7 @@ You build the Job Finder Electron app's UI, IPC and DB layer. Read `RULES.md` (l
 
 ## Your lane
 
-- `src/renderer/src/**`, `src/preload/**`, `src/shared/**` (except `roles.ts`), `src/main/{index,ipc,companiesIpc,shortcuts}.ts`, `src/main/jobs/{queries,open,refreshService}.ts`, `src/main/db/**`, `electron-builder.yml`, `package.json` dependencies (tell the other agents when you change them).
+- `src/renderer/src/**`, `src/preload/**`, `src/shared/**` (except `roles.ts`), `src/main/{index,ipc,companiesIpc,jsearchIpc,shortcuts}.ts`, `src/main/jobs/{queries,open,refreshService}.ts`, `src/main/db/**`, `electron-builder.yml`, `package.json` dependencies (tell the other agents when you change them).
 - Implement `docs/dashboard-spec.md`; ask ui-ux for design decisions beyond it.
 
 ## Out of lane
