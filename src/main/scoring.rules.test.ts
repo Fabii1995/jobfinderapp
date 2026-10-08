@@ -42,12 +42,14 @@ describe('experience-requirement rules (user decisions)', () => {
     expect(s(BASE, '1+ years of experience')).toBeGreaterThan(s(BASE, null))
   })
 
-  it('"2+ years" does not count: no bonus, no baseline, no penalty', () => {
+  it('"2+ years" gives no bonus and no baseline, and costs exactly WEIGHTS.twoYearsBody (-10) on a non-junior title', () => {
+    expect(WEIGHTS.twoYearsBody).toBe(-10)
     expect(bodyJuniorStrength('2+ years of experience')).toBe(null)
     expect(bodyJuniorStrength('2 years of experience')).toBe(null)
-    expect(s(BASE, '2+ years of experience')).toBe(20) // equals the bare title score
-    expect(s('Backend Developer', '2+ years of experience')).toBe(30)
+    expect(s(BASE, '2+ years of experience')).toBe(10) // bare general title 20, no baseline, -10
+    expect(s('Backend Developer', '2+ years of experience')).toBe(20) // bare strong title 30, -10
     expect(s(BASE, '2+ years of experience')).toBeLessThan(s(BASE, null))
+    expect(s(BASE, '2+ years of experience')).toBeLessThan(MIN_SCORE)
   })
 
   it('3+ years still penalised; senior titles still 0 whatever the body says', () => {
@@ -146,7 +148,8 @@ describe('experience rules: largest minimum wins, Hebrew hardware-test titles', 
   it('a "1+" bullet next to a "2+" bullet is not junior (the larger minimum wins)', () => {
     const d = '- 2+ years of non-internship professional software development experience\n- 1+ years of non-internship design experience'
     expect(bodyJuniorStrength(d)).toBe(null)
-    expect(scoreJob(job('Software Development Engineer', { description: d }))).toBe(20)
+    // general title 20, no baseline (experience stated), twoYearsBody -10 (largest minimum is 2)
+    expect(scoreJob(job('Software Development Engineer', { description: d }))).toBe(10)
   })
   it('hardware-test titles in Hebrew are not software QA (no bare "מהנדס בדיקות" keyword)', () => {
     expect(scoreJob(job('מהנדס/ת בדיקות ועיבוד אותות'))).toBeLessThan(MIN_SCORE)

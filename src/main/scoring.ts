@@ -248,6 +248,8 @@ const HE_MIN_AFTER = /ניסיון(?:\s+\p{L}+){0,2}?\s+(?:של|לפחות)\s+(?
 
 const RANGE_RE = /(?<![\d.])(\d{1,2})\s*\+?\s*(?:-|–|—|to)\s*(\d{1,2})\s*\+?\s*(?:years?|yrs?)\b/gi
 const UPTO_RE = /\b(?:up to|less than|under|maximum of|max(?:imum)?\.?)\s*(\d{1,2})\s*(?:years?|yrs?)\b/gi
+/** "2 years or less/fewer" is a ceiling, not a minimum. */
+const OR_LESS_RE = /(?<![\d.])(\d{1,2})\s*(?:years?|yrs?)\s+(?:or|and)\s+(?:less|fewer|under)\b/gi
 const MIN_PLUS_RE = /(?<![\d.-])(\d{1,2})\s*\+\s*(?:years?|yrs?)\b(?!\s+ago)/gi
 const MIN_AT_LEAST_RE =
   /\b(?:at least|minimum(?: of)?|min\.?|over|more than)\s*(\d{1,2})\s*(?:years?|yrs?)\b/gi
@@ -328,6 +330,7 @@ export function extractExperience(text: string): ExperienceStatement[] {
   take(HE_RANGE_AFTER, (m) => ({ min: Math.min(+m[1], +m[2]), max: Math.max(+m[1], +m[2]) }))
   take(UPTO_RE, (m) => ({ min: 0, max: Number(m[1]) }))
   take(HE_UPTO, (m) => ({ min: 0, max: Number(m[1]) }))
+  take(OR_LESS_RE, (m) => ({ min: 0, max: Number(m[1]) }))
   take(MIN_PLUS_RE, (m) => ({ min: Number(m[1]), max: null }))
   take(MIN_AT_LEAST_RE, (m) => ({ min: Number(m[1]), max: null }))
   take(MIN_EXP_OF_RE, (m) => ({ min: Number(m[1]), max: null }))
@@ -394,6 +397,16 @@ export function bodyRequiresExperience(body: string): boolean {
   return extractExperience(body).some((s) => s.min >= MIN_YEARS_PENALTY)
 }
 
+/**
+ * The highest stated minimum is exactly 2 years ("2+", "at least 2", "2 years of experience", "2-4 years",
+ * Hebrew "שנתיים ניסיון"). 1+ years, "0-2", "1-2", "up to 2" (min 0/1) never qualify, and a 3+ minimum is
+ * handled by bodyRequiresExperience (the two penalties never stack).
+ */
+export function bodyRequiresTwoYears(body: string): boolean {
+  const mins = extractExperience(body).map((s) => s.min)
+  return mins.length > 0 && Math.max(...mins) === 2
+}
+
 // ---- weights -------------------------------------------------------------------------------
 
 export const WEIGHTS = {
@@ -420,7 +433,14 @@ export const WEIGHTS = {
   midTag: -10,
   midTitle: -15,
   seniorTag: -60,
-  seniorBody: -25
+  seniorBody: -25,
+  /**
+   * Stated minimum of exactly 2 years (user decision 2026-10-08), only when the TITLE has no
+   * junior/graduate/entry/associate marker. Sized to push a bare strong-role title (30) and a software
+   * title (20 + 10 weak-junior) below MIN_SCORE with a 10-point margin; smaller than seniorBody because
+   * 2 years is still near-junior. Never stacks with seniorBody.
+   */
+  twoYearsBody: -10
 } as const
 
 /** Max score for a title with no target-role keyword: junior-but-irrelevant (e.g. junior marketing) must stay below MIN_SCORE in refresh.ts. */
@@ -555,6 +575,7 @@ export function scoreJob(raw: RawJob): number {
     if (hasMidTag) score += WEIGHTS.midTag
     if (MID_TITLE_RE.test(title)) score += WEIGHTS.midTitle
     if (bodyRequiresExperience(body)) score += WEIGHTS.seniorBody
+    else if (titlePts === 0 && bodyRequiresTwoYears(body)) score += WEIGHTS.twoYearsBody
   }
 
   const titleHasRole = strongTitle || generalTitle

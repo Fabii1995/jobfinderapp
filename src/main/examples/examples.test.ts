@@ -271,3 +271,13 @@ describe('report', () => {
     expect(formatReport([])).toMatch(/No examples yet/)
   })
 })
+
+describe('training-data/examples.json labels agree with the current scoring', () => {
+  it('every labeled example with text is kept when fit and not kept when no-fit (no mismatches)', () => {
+    const file = join(__dirname, '..', '..', '..', 'training-data', 'examples.json')
+    if (!existsSync(file)) return
+    const rows = loadExamples(file).map(buildRow).filter((r) => r.score !== null)
+    const mismatches = rows.filter((r) => r.mismatch).map((r) => `${r.example.label} score=${r.score} ${r.example.title}`)
+    expect(mismatches).toEqual([])
+  })
+})

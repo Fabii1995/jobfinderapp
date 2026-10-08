@@ -36,8 +36,21 @@ const ROWS: Row[] = [
   { rule: '"1 year of experience" counts', title: 'QA Engineer', desc: '1 year of experience in testing', min: 45, max: 60 },
   { rule: '0-2 years is a strong junior signal', title: 'Backend Developer', desc: '0-2 years of experience', min: 55, max: 80 },
   { rule: '0-3 years moderate', title: 'Backend Developer', desc: '0-3 years of experience', min: 45, max: 60 },
-  { rule: '2+ years is neutral: equal to the bare strong title (30)', title: 'QA Engineer', desc: '2+ years of experience in testing', min: 30, max: 30 },
-  { rule: '2 years is neutral', title: 'QA Engineer', desc: '2 years of experience', min: 30, max: 30 },
+  { rule: '2+ years on a non-junior title costs exactly -10: no baseline, strong title 30 -> 20', title: 'QA Engineer', desc: '2+ years of experience in testing', min: 20, max: 20 },
+  { rule: 'plain "2 years" on a non-junior title is penalized -10 (30 -> 20)', title: 'QA Engineer', desc: '2 years of experience', min: 20, max: 20 },
+  { rule: 'real: SONiC Software Engineer - Python, 2+ years as a Software Engineer, < MIN_SCORE', title: 'SONiC Software Engineer - Python', desc: '2+ years of experience as a Software Engineer', min: 20, max: 20 },
+  { rule: 'real: Software QA Automation Engineer, "At least 2 years of hands-on experience"', title: 'Software QA Automation Engineer', desc: 'At least 2 years of hands-on experience', min: 20, max: 20 },
+  { rule: 'Junior title with 2+ years is not penalized', title: 'Junior QA Engineer', desc: '2+ years of experience', min: 70, max: 70 },
+  { rule: 'Associate title with 2+ years is exempt (same as without)', title: 'Associate QA Engineer', desc: '2+ years of experience', min: 50, max: 50 },
+  { rule: '"1-2 years" range is not penalized', title: 'QA Engineer', desc: '1-2 years of experience', min: 50, max: 50 },
+  { rule: '"0-2 years" is not penalized', title: 'QA Engineer', desc: '0-2 years', min: 60, max: 60 },
+  { rule: '"up to 2 years" is not penalized', title: 'QA Engineer', desc: 'up to 2 years', min: 60, max: 60 },
+  { rule: '"2 years or less" is a ceiling, not penalized', title: 'QA Engineer', desc: '2 years or less', min: 60, max: 60 },
+  { rule: '"3 years or less" is a ceiling too: no -25', title: 'QA Engineer', desc: '3 years or less', min: 50, max: 50 },
+  { rule: '"1+ years" keeps its +20 moderate junior signal', title: 'QA Engineer', desc: '1+ years of experience', min: 50, max: 50 },
+  { rule: '"2-4 years" (min 2) is penalized -10', title: 'QA Engineer', desc: '2-4 years of experience', min: 20, max: 20 },
+  { rule: '3+ years keeps -25 only (does not stack with the 2-year penalty)', title: 'QA Engineer', desc: '3+ years of experience', min: 5, max: 5 },
+  { rule: '"2+ years or equivalent experience" is penalized', title: 'Software Engineer', desc: '2+ years or equivalent experience', min: 10, max: 10 },
   { rule: '2+ years with a bare general title stays below MIN_SCORE', title: 'Software Engineer', desc: '2+ years of experience', min: 0, max: MIN_SCORE - 1 },
   { rule: '3+ years penalised', title: 'Backend Developer', desc: '3+ years of experience with Python', min: 0, max: 10 },
   { rule: '5 years penalised', title: 'Backend Developer', desc: '5 years of experience', min: 0, max: 10 },
@@ -102,7 +115,8 @@ const ROWS: Row[] = [
   { rule: 'Hebrew 0-2 שנים ניסיון', title: 'מפתח/ת פייתון', desc: 'ניסיון של 0-2 שנים', min: 55, max: 100 },
   { rule: 'Hebrew ללא ניסיון', title: 'מהנדס/ת תוכנה', desc: 'ללא ניסיון', min: 45, max: 100 },
   { rule: 'Hebrew 5 years penalty', title: 'מהנדס תוכנה', desc: 'נדרש ניסיון של 5 שנים', min: 0, max: 10 },
-  { rule: 'Hebrew שנתיים is neutral (general title bare score)', title: 'מפתח תוכנה', desc: 'שנתיים ניסיון', min: 20, max: 20 },
+  { rule: 'Hebrew שנתיים ניסיון is penalized -10 (general title: no baseline, 20 -> 10)', title: 'מפתח תוכנה', desc: 'שנתיים ניסיון', min: 10, max: 10 },
+  { rule: 'Hebrew שנתיים ניסיון on a bare Hebrew developer title stays below MIN_SCORE', title: 'מפתח תוכנה', desc: 'שנתיים ניסיון', min: 0, max: MIN_SCORE - 1 },
   { rule: 'Hebrew 3 שנות ניסיון penalty', title: 'מפתח תוכנה', desc: '3 שנות ניסיון בפיתוח', min: 0, max: 0 },
   { rule: 'Hebrew manager title', title: 'מנהל פיתוח', min: 0, max: 0 },
 
@@ -174,7 +188,7 @@ describe('scoring: relational rules', () => {
       for (const t of ['Senior ', 'Sr. ', 'Lead ', 'Principal ']) expect(s(t + 'Python Developer', d), `${t}/${d}`).toBe(0)
     }
   })
-  it('ordering: 3+ penalty < 2+ neutral < no-experience baseline <= 1+ moderate < junior title', () => {
+  it('ordering: 3+ penalty < 2+ penalty (-10) < no-experience baseline <= 1+ moderate < junior title', () => {
     const pen = s('Backend Developer', '3+ years of experience')
     const two = s('Backend Developer', '2+ years of experience')
     const none = s('Backend Developer')
