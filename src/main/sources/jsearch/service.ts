@@ -7,7 +7,7 @@ import { upsertJobs, type ScoredJob } from '../../jobs/upsert'
 import { classifyRoles } from '../../roles'
 import { asArray, asRecord } from '../http'
 import { dedupeKey, JSEARCH_SOURCE, mapJSearchRow, mapSerpapiRow, serpapiJobId, SERPAPI_SOURCE, type MapOutcome } from './map'
-import type { DeepSearchProvider, JSearchRunResult, JSearchRunSummary, JSearchStatus } from './types'
+import type { DeepSearchProvider, JSearchDropCounts, JSearchRunResult, JSearchRunSummary, JSearchStatus } from './types'
 
 export const JSEARCH_URL = 'https://api.openwebninja.com/jsearch/search-v2'
 /** JSearch monthly limit: 200 is the user's plan limit; the app blocks at this many requests. */
@@ -108,6 +108,52 @@ const nextMonthStart = (ms: number): number => {
   const d = new Date(ms)
   return Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1)
 }
+const emptyDrops = (): JSearchDropCounts => ({ location: 0, old: 0, noJuniorSignal: 0, scoreTooLow: 0, duplicate: 0, invalid: 0 })
+
+/** Tolerant parse of a persisted summary: counts only, new fields default to 0 for old files. */
+function parseSummary(v: unknown): JSearchRunSummary | null {
+  const r = asRecord(v)
+  if (!r) return null
+  const n = (x: unknown): number => (typeof x === 'number' && Number.isFinite(x) && x >= 0 ? x : 0)
+  const d = asRecord(r.dropped)
+  const out: JSearchRunSummary = {
+    fetched: n(r.fetched),
+    kept: n(r.kept),
+    inserted: n(r.inserted),
+    updated: n(r.updated),
+    skippedDuplicates: n(r.skippedDuplicates),
+    requests: n(r.requests),
+    seenSkipped: n(r.seenSkipped),
+    dropped: {
+      location: n(d?.location),
+      old: n(d?.old),
+      noJuniorSignal: n(d?.noJuniorSignal),
+      scoreTooLow: n(d?.scoreTooLow),
+      duplicate: n(d?.duplicate),
+      invalid: n(d?.invalid)
+    }
+  }
+  if (r.provider === 'jsearch' || r.provider === 'serpapi') out.provider = r.provider
+  return out
+}
+
+/** Compact ", N seen-skipped, dropped: a location, b old" fragment (non-zero entries only; '' when nothing). */
+function breakdown(s: JSearchRunSummary): string {
+  const names: [keyof JSearchDropCounts, string][] = [
+    ['location', 'location'],
+    ['old', 'too old'],
+    ['noJuniorSignal', 'no junior signal'],
+    ['scoreTooLow', 'low score'],
+    ['duplicate', 'duplicate'],
+    ['invalid', 'invalid']
+  ]
+  const parts = names.filter(([k]) => s.dropped[k] > 0).map(([k, l]) => `${s.dropped[k]} ${l}`)
+  const out: string[] = []
+  if (s.seenSkipped > 0) out.push(`${s.seenSkipped} already seen`)
+  if (parts.length) out.push(`dropped: ${parts.join(', ')}`)
+  return out.length ? ` (${out.join('; ')})` : ''
+}
+
 const freshState = (ms: number): State => ({
   month: monthKey(ms),
   used: 0,
@@ -190,7 +236,7 @@ export function createJSearchService(opts: JSearchServiceOptions) {
       blockedUntil: num(raw.blockedUntil),
       blockedReason: typeof raw.blockedReason === 'string' ? raw.blockedReason : null,
       lastRunAt: num(raw.lastRunAt),
-      lastRunSummary: (asRecord(raw.lastRunSummary) as JSearchRunSummary | null) ?? null,
+      lastRunSummary: parseSummary(raw.lastRunSummary),
       seen: {}
     }
     for (const [k, v] of Object.entries(asRecord(raw.seen) ?? {})) {
@@ -343,6 +389,8 @@ export function createJSearchService(opts: JSearchServiceOptions) {
       updated: 0,
       skippedDuplicates: 0,
       requests: 0,
+      seenSkipped: 0,
+      dropped: emptyDrops(),
       provider: p
     }
     // Dedupe against every row not from this provider's own source (ATS rows and the other provider's rows).
@@ -470,16 +518,24 @@ export function createJSearchService(opts: JSearchServiceOptions) {
         const id = p === 'serpapi' ? serpapiJobId(item) : asRecord(item)?.job_id
         if (typeof id === 'string' && id) {
           if (s.seen[id] !== undefined) {
-            summary.skippedDuplicates++
+            summary.seenSkipped++
             continue
           }
           s.seen[id] = t
         }
         const out: MapOutcome = p === 'serpapi' ? mapSerpapiRow(item, t) : mapJSearchRow(item, t)
-        if (out.kind !== 'job') continue
+        if (out.kind !== 'job') {
+          const d = summary.dropped
+          if (out.reason === 'invalid') d.invalid++
+          else if (out.reason === 'old') d.old++
+          else if (out.reason === 'location') d.location++
+          else if (out.reason === 'score') d.scoreTooLow++
+          else d.noJuniorSignal++
+          continue
+        }
         const dk = dedupeKey(out.job.title, out.job.company)
         if (atsKeys.has(dk) || runKeys.has(dk)) {
-          summary.skippedDuplicates++
+          summary.dropped.duplicate++
           continue
         }
         runKeys.add(dk)
@@ -493,6 +549,7 @@ export function createJSearchService(opts: JSearchServiceOptions) {
     }
     for (const [note, idx] of emptyNotes) stopNote += ` [q${idx.join(',q')}: ${note}]`
     summary.kept = rows.length
+    summary.skippedDuplicates = summary.seenSkipped + summary.dropped.duplicate
     if (rows.length > 0) {
       const { inserted, updated } = upsertJobs(opts.db, rows)
       summary.inserted = inserted
@@ -512,7 +569,7 @@ export function createJSearchService(opts: JSearchServiceOptions) {
       ok: !failed,
       summary,
       provider: p,
-      message: `${label}: ${summary.requests} request(s), ${summary.fetched} fetched, ${summary.kept} kept (${summary.inserted} new, ${summary.updated} updated), ${summary.skippedDuplicates} duplicates skipped.${stopNote}`
+      message: `${label}: ${summary.requests} request(s), ${summary.fetched} fetched, ${summary.kept} kept (${summary.inserted} new, ${summary.updated} updated), ${summary.skippedDuplicates} duplicates skipped${breakdown(summary)}.${stopNote}`
     }
   }
 
@@ -611,7 +668,28 @@ export function createJSearchService(opts: JSearchServiceOptions) {
     return guarded(LABELS[p], () => execute(p))
   }
 
-  return { getStatus, setKey, clearKey, setSerpapiKey, clearSerpapiKey, runDeepRefresh, maybeRunWeekly }
+  /**
+   * Clears ONLY `seen` in jsearch-state.json and serpapi-state.json (raw read, atomic write; every other field is
+   * kept byte-for-byte in value). Missing files are not created. No config/keys, DB or network involved.
+   */
+  function clearSeen(): { ok: true; cleared: number } | { ok: false; error: string } {
+    if (inFlight) return { ok: false, error: 'A deep refresh is running; try again when it finishes.' }
+    try {
+      let cleared = 0
+      for (const path of [jsStatePath, spStatePath]) {
+        if (!existsSync(path)) continue
+        const raw = readJson(path)
+        if (!raw) continue
+        cleared += Object.keys(asRecord(raw.seen) ?? {}).length
+        writeJsonAtomic(path, { ...raw, seen: {} })
+      }
+      return { ok: true, cleared }
+    } catch (e) {
+      return { ok: false, error: scrub(e instanceof Error ? e.message : 'unknown error') }
+    }
+  }
+
+  return { getStatus, setKey, clearKey, setSerpapiKey, clearSerpapiKey, runDeepRefresh, maybeRunWeekly, clearSeen }
 }
 
 export type JSearchService = ReturnType<typeof createJSearchService>

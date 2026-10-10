@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { useUiStore } from '@renderer/store/ui'
 import { providerName } from '@renderer/lib/jsearch'
+import type { JSearchClearSeenResult } from '@renderer/lib/types'
 import { jobKeys } from './useJobs'
 
 export const deepSearchKeys = { status: ['deepSearch', 'status'] as const }
@@ -41,6 +42,12 @@ export function useDeepSearchMutations() {
     clearSerpapiKey: useMutation({
       mutationFn: () => window.api.jsearch.clearSerpapiKey(),
       onSuccess: refreshStatus
+    }),
+    clearSeen: useMutation({
+      mutationFn: (): Promise<JSearchClearSeenResult> => window.api.jsearch.clearSeen(),
+      onSuccess: (res) => {
+        if (res.ok) void refreshStatus()
+      }
     }),
     deepRefresh: useMutation({
       mutationFn: () => window.api.jsearch.deepRefresh(),

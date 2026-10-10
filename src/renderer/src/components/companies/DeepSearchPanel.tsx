@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { AlertTriangle, Check, Loader2, Radar } from 'lucide-react'
+import { AlertTriangle, Check, Loader2, Radar, RotateCcw } from 'lucide-react'
 import { Alert, AlertDescription, AlertTitle } from '@renderer/components/ui/alert'
 import { Badge } from '@renderer/components/ui/badge'
 import { Button } from '@renderer/components/ui/button'
@@ -7,7 +7,7 @@ import { Input } from '@renderer/components/ui/input'
 import { Skeleton } from '@renderer/components/ui/skeleton'
 import { useDeepSearchMutations, useDeepSearchStatus } from '@renderer/hooks/useDeepSearch'
 import { useNow } from '@renderer/hooks/useNow'
-import { formatUtcDate, nextMonthStart, providerName } from '@renderer/lib/jsearch'
+import { formatLastRun, formatUtcDate, nextMonthStart, providerName } from '@renderer/lib/jsearch'
 import { formatAbsolute, formatRelative } from '@renderer/lib/time'
 import {
   MAX_API_KEY_LENGTH,
@@ -381,12 +381,175 @@ function activeText(status: JSearchStatus, resetDate: string): string {
   }
 }
 
+function ClearSeen({
+  running,
+  runButtonRef
+}: {
+  running: boolean
+  runButtonRef: React.RefObject<HTMLButtonElement | null>
+}): React.JSX.Element {
+  const { clearSeen } = useDeepSearchMutations()
+  const [open, setOpen] = useState(false)
+  const [notice, setNotice] = useState('')
+  const [error, setError] = useState('')
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const confirmRef = useRef<HTMLButtonElement>(null)
+  const pending = clearSeen.isPending
+
+  useEffect(() => {
+    if (open) confirmRef.current?.focus()
+  }, [open])
+
+  // Clear the local message when a deep refresh starts ("until the next run/clear").
+  useEffect(() => {
+    if (running) {
+      setNotice('')
+      setError('')
+    }
+  }, [running])
+
+  const returnFocus = (): void => {
+    // Wait for the confirm to unmount / the trigger to re-enable before moving focus.
+    requestAnimationFrame(() => {
+      const t = triggerRef.current
+      if (t && !t.disabled) t.focus()
+      else runButtonRef.current?.focus()
+    })
+  }
+
+  const close = (): void => {
+    setOpen(false)
+    returnFocus()
+  }
+
+  const confirm = (): void => {
+    if (running || pending) return
+    setNotice('')
+    setError('')
+    clearSeen.mutate(undefined, {
+      onSuccess: (res) => {
+        if (res.ok) setNotice(`Cleared ${res.cleared} remembered ${res.cleared === 1 ? 'job' : 'jobs'}`)
+        else setError(res.error)
+        setOpen(false)
+        returnFocus()
+      },
+      onError: () => {
+        setError('Could not clear seen jobs.')
+        setOpen(false)
+        returnFocus()
+      }
+    })
+  }
+
+  return (
+    <div className="flex flex-col gap-2">
+      {open ? (
+        <div
+          id="deepsearch-clear-seen-confirm"
+          role="group"
+          aria-labelledby="deepsearch-clear-seen-title"
+          data-testid="deepsearch-clear-seen-confirm"
+          className="flex flex-col gap-2 rounded-md border p-2"
+          onKeyDown={(e) => {
+            if (e.key === 'Escape' && !pending) {
+              e.stopPropagation()
+              close()
+            }
+          }}
+        >
+          <p id="deepsearch-clear-seen-title" className="text-xs font-medium">
+            Clear remembered jobs?
+          </p>
+          <p className="text-xs text-muted-foreground">
+            The next deep refresh will look at every job the search returns again, including jobs it
+            rejected earlier under older rules, so some may now be added. This does not reset the
+            monthly request counter, unblock a paused provider, touch your keys, or change or delete
+            any saved jobs. Clearing itself uses no requests.
+          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              ref={confirmRef}
+              size="sm"
+              variant="default"
+              aria-label={pending ? undefined : 'Clear seen jobs, confirm'}
+              aria-busy={pending || undefined}
+              aria-describedby={running ? 'deepsearch-clear-seen-hint' : undefined}
+              disabled={running || pending}
+              onClick={confirm}
+            >
+              {pending && (
+                <Loader2 className="animate-spin motion-reduce:animate-none" aria-hidden="true" />
+              )}
+              {pending ? 'Clearing...' : 'Clear'}
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              aria-label="Cancel, clear seen jobs"
+              disabled={pending}
+              onClick={close}
+            >
+              Cancel
+            </Button>
+          </div>
+          {running && (
+            <p id="deepsearch-clear-seen-hint" className="text-xs text-muted-foreground">
+              Available when the deep refresh finishes.
+            </p>
+          )}
+        </div>
+      ) : (
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            ref={triggerRef}
+            size="sm"
+            variant="outline"
+            data-testid="deepsearch-clear-seen"
+            aria-expanded={false}
+            aria-controls="deepsearch-clear-seen-confirm"
+            aria-describedby={running ? 'deepsearch-clear-seen-hint' : undefined}
+            disabled={running}
+            onClick={() => {
+              setNotice('')
+              setError('')
+              setOpen(true)
+            }}
+          >
+            <RotateCcw aria-hidden="true" />
+            Clear seen jobs
+          </Button>
+          {running && (
+            <span id="deepsearch-clear-seen-hint" className="text-xs text-muted-foreground">
+              Available when the deep refresh finishes.
+            </span>
+          )}
+        </div>
+      )}
+      <p
+        role="status"
+        data-testid="deepsearch-clear-seen-notice"
+        className="text-xs text-muted-foreground empty:hidden"
+      >
+        {notice}
+      </p>
+      <p
+        role="alert"
+        data-testid="deepsearch-clear-seen-error"
+        className="text-xs text-destructive empty:hidden"
+      >
+        {error}
+      </p>
+    </div>
+  )
+}
+
 function Controls({ status }: { status: JSearchStatus }): React.JSX.Element {
   const mut = useDeepSearchMutations()
   const deepRefresh = mut.deepRefresh
   const now = useNow()
   const [runError, setRunError] = useState<string | null>(null)
   const sp0 = status.serpapi
+  const runButtonRef = useRef<HTMLButtonElement>(null)
   const [lastProvider, setLastProvider] = useState<DeepSearchProvider | null>(null)
 
   useEffect(() => {
@@ -403,7 +566,7 @@ function Controls({ status }: { status: JSearchStatus }): React.JSX.Element {
 
   const lastAt = status.lastRunAt ? Date.parse(status.lastRunAt) : NaN
   const s = status.lastRunSummary
-  const served = s?.provider ?? lastProvider
+  const lines = s ? formatLastRun(s, lastProvider) : null
 
   const jsMut: KeyMutations = {
     save: (k) => {
@@ -525,6 +688,7 @@ function Controls({ status }: { status: JSearchStatus }): React.JSX.Element {
             aria-busy={running || undefined}
             aria-describedby="deepsearch-run-hint"
             data-testid="deepsearch-run"
+            ref={runButtonRef}
             onClick={run}
           >
             {running ? (
@@ -545,19 +709,26 @@ function Controls({ status }: { status: JSearchStatus }): React.JSX.Element {
         )}
       </div>
 
-      <p data-testid="deepsearch-last-run" className="text-xs text-muted-foreground">
-        {Number.isFinite(lastAt) && s ? (
+      <div
+        data-testid="deepsearch-last-run"
+        className="flex flex-col gap-0.5 text-xs text-muted-foreground"
+      >
+        {Number.isFinite(lastAt) && s && lines ? (
           <>
-            Last run <span title={formatAbsolute(lastAt)}>{formatRelative(lastAt, now)}</span>
-            {served ? ` via ${providerName(served)}` : ''}: {s.fetched} found, {s.kept} kept,{' '}
-            {s.inserted} new, {s.updated} updated, {s.skippedDuplicates} already known,{' '}
-            {s.requests} requests.
+            <p>
+              Last run <span title={formatAbsolute(lastAt)}>{formatRelative(lastAt, now)}</span>
+              {lines.headerTail}
+            </p>
+            {lines.filtering && <p>{lines.filtering}</p>}
+            <p>{lines.kept}</p>
           </>
         ) : (
-          'Not run yet.'
-        )}{' '}
-        Also runs about once a week automatically. It does not run on the 3-hour refresh.
-      </p>
+          <p>Not run yet.</p>
+        )}
+        <p>Also runs about once a week automatically. It does not run on the 3-hour refresh.</p>
+      </div>
+
+      <ClearSeen running={running} runButtonRef={runButtonRef} />
     </div>
   )
 }

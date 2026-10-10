@@ -5,10 +5,24 @@ export interface JSearchRunSummary {
   kept: number
   inserted: number
   updated: number
+  /** Legacy: seenSkipped + dropped.duplicate. */
   skippedDuplicates: number
   requests: number
+  /** Rows skipped because their job id was already in `seen` (loadState fills 0 for older persisted summaries). */
+  seenSkipped: number
+  /** Rows dropped by reason. Invariant: fetched = seenSkipped + sum(dropped) + kept. Zero-filled for older summaries. */
+  dropped: JSearchDropCounts
   /** Provider that produced this summary (absent in summaries persisted before SerpApi was added). */
   provider?: DeepSearchProvider
+}
+
+export interface JSearchDropCounts {
+  location: number
+  old: number
+  noJuniorSignal: number
+  scoreTooLow: number
+  duplicate: number
+  invalid: number
 }
 
 export type DeepSearchProvider = 'jsearch' | 'serpapi'

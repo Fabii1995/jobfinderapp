@@ -13,6 +13,8 @@ export type {
   JSearchRunSummary,
   JSearchRunResult,
   JSearchSetKeyResult,
+  JSearchClearSeenResult,
+  JSearchDropped,
   SerpapiStatus,
   DeepSearchProvider
 } from '../../../shared/jsearch'

@@ -1,4 +1,4 @@
-import type { Job } from './types'
+import type { DeepSearchProvider, Job, JSearchDropped, JSearchRunSummary } from './types'
 
 export const JSEARCH_SOURCE = 'jsearch'
 export const SERPAPI_SOURCE = 'serpapi'
@@ -38,3 +38,65 @@ export function nextMonthStart(month: string): number | null {
 
 export const formatUtcDate = (ts: number): string =>
   new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeZone: 'UTC' }).format(ts)
+
+const num = (v: unknown): number | null =>
+  typeof v === 'number' && Number.isFinite(v) && v >= 0 ? Math.trunc(v) : null
+
+const DROP_LABELS: ReadonlyArray<readonly [keyof JSearchDropped, string]> = [
+  ['location', 'location'],
+  ['old', 'old'],
+  ['noJuniorSignal', 'no junior signal'],
+  ['scoreTooLow', 'score too low'],
+  ['duplicate', 'duplicate'],
+  ['invalid', 'invalid']
+]
+
+export interface LastRunLines {
+  /** Text after "Last run {when}": " via X: N found, M requests." (via omitted when unknown). */
+  headerTail: string
+  /** Funnel line 2, or null when there is nothing to show (and always null for old summaries). */
+  filtering: string | null
+  /** Funnel line 3 (new summaries) or the merged legacy line (old summaries). */
+  kept: string
+}
+
+/**
+ * Pure formatter for the "Last run" block (spec 10.6). `fallbackProvider` is this session's provider,
+ * used when the summary predates the `provider` field. Never prints undefined/NaN or an unrecorded 0.
+ */
+export function formatLastRun(
+  s: JSearchRunSummary,
+  fallbackProvider?: DeepSearchProvider | null
+): LastRunLines {
+  const provider = s.provider ?? fallbackProvider ?? null
+  const via = provider ? ` via ${providerName(provider)}` : ''
+  const headerTail = `${via}: ${num(s.fetched) ?? 0} found, ${num(s.requests) ?? 0} requests.`
+
+  const kept = num(s.kept) ?? 0
+  const inserted = num(s.inserted) ?? 0
+  const updated = num(s.updated) ?? 0
+  const seen = num(s.seenSkipped)
+  const dropped = s.dropped && typeof s.dropped === 'object' ? s.dropped : null
+
+  if (seen === null && !dropped) {
+    const dup = num(s.skippedDuplicates)
+    const parts = [`${kept} kept`, `${inserted} new`, `${updated} updated`]
+    if (dup !== null) parts.push(`${dup} duplicates skipped`)
+    return { headerTail, filtering: null, kept: `${parts.join(', ')}.` }
+  }
+
+  const sentences: string[] = []
+  if (seen !== null && seen > 0) sentences.push(`Skipped ${seen} already seen.`)
+  if (dropped) {
+    const items = DROP_LABELS.flatMap(([key, label]) => {
+      const n = num(dropped[key])
+      return n !== null && n > 0 ? [`${n} ${label}`] : []
+    })
+    if (items.length > 0) sentences.push(`Dropped: ${items.join(', ')}.`)
+  }
+  return {
+    headerTail,
+    filtering: sentences.length > 0 ? sentences.join(' ') : null,
+    kept: `Kept ${kept}: ${inserted} new, ${updated} updated.`
+  }
+}

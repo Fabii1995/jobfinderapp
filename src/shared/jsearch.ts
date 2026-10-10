@@ -9,6 +9,19 @@ export interface JSearchRunSummary {
   requests: number
   /** Provider that produced this summary (absent in summaries persisted before SerpApi was added). */
   provider?: DeepSearchProvider
+  /** Jobs skipped because an earlier run already evaluated them (absent on older summaries). */
+  seenSkipped?: number
+  /** Why fetched jobs were dropped (absent on older summaries). fetched = seenSkipped + sum(dropped) + kept. */
+  dropped?: JSearchDropped
+}
+
+export interface JSearchDropped {
+  location: number
+  old: number
+  noJuniorSignal: number
+  scoreTooLow: number
+  duplicate: number
+  invalid: number
 }
 
 /** Never contains the API key. */
@@ -57,5 +70,7 @@ export interface JSearchRunResult {
 }
 
 export type JSearchSetKeyResult = { ok: true } | { ok: false; error: string }
+
+export type JSearchClearSeenResult = { ok: true; cleared: number } | { ok: false; error: string }
 
 export const MAX_API_KEY_LENGTH = 256

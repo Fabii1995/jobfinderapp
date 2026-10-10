@@ -3,6 +3,7 @@ import type { JSearchService } from './sources/jsearch'
 import { IPC } from '../shared/ipc'
 import {
   MAX_API_KEY_LENGTH,
+  type JSearchClearSeenResult,
   type JSearchRunResult,
   type JSearchSetKeyResult
 } from '../shared/jsearch'
@@ -45,7 +46,10 @@ export function createDeepRunner(service: JSearchService, notify: () => void) {
     return p
   }
 
-  return { deepRefresh, maybeRunWeekly }
+  /** True while a manual deep refresh is in flight (the service also refuses during any of its own runs). */
+  const isRunning = (): boolean => inFlight !== null
+
+  return { deepRefresh, maybeRunWeekly, isRunning }
 }
 
 export function registerJSearchIpc(
@@ -81,4 +85,17 @@ export function registerJSearchIpc(
     return { ok: true }
   })
   ipcMain.handle(IPC.jsearchDeepRefresh, () => runner.deepRefresh())
+  ipcMain.handle(IPC.jsearchClearSeen, (_e, ...args: unknown[]): JSearchClearSeenResult => {
+    if (args.length > 0) return { ok: false, error: 'Invalid request.' }
+    if (runner.isRunning()) {
+      return { ok: false, error: 'A deep refresh is running; try again when it finishes.' }
+    }
+    try {
+      const res = service.clearSeen()
+      if (res.ok) return { ok: true, cleared: res.cleared }
+      return { ok: false, error: typeof res.error === 'string' && res.error ? res.error : 'Could not clear seen jobs.' }
+    } catch {
+      return { ok: false, error: 'Could not clear seen jobs.' }
+    }
+  })
 }

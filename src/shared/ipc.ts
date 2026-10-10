@@ -1,6 +1,7 @@
 import type { Job } from '../main/db/schema'
 import type { Ats } from '../main/companies/types'
 import type {
+  JSearchClearSeenResult,
   JSearchRunResult,
   JSearchSetKeyResult,
   JSearchStatus
@@ -25,6 +26,7 @@ export const IPC = {
   jsearchSetSerpapiKey: 'jsearch:setSerpapiKey',
   jsearchClearSerpapiKey: 'jsearch:clearSerpapiKey',
   jsearchDeepRefresh: 'jsearch:deepRefresh',
+  jsearchClearSeen: 'jsearch:clearSeen',
   /** main -> renderer push: job data changed (a refresh finished, manual or scheduled). */
   changed: 'jobs:changed'
 } as const
@@ -130,6 +132,8 @@ export interface JobFinderApi {
     clearSerpapiKey(): Promise<{ ok: true }>
     /** Manual deep refresh (spends API quota). Concurrent calls share one run. */
     deepRefresh(): Promise<JSearchRunResult>
+    /** Forget remembered (seen) job ids so the next deep refresh re-evaluates them. Spends no quota. */
+    clearSeen(): Promise<JSearchClearSeenResult>
   }
   /** Subscribe to `jobs:changed` pushes. Returns an unsubscribe function. */
   onChanged(cb: () => void): () => void

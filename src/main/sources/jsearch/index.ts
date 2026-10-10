@@ -9,6 +9,7 @@
  *                                           // Throws Error('Invalid API key format.') or if config.json is unreadable.
  *     clearKey(): void                      // removes only "jsearchApiKey"
  *     runDeepRefresh(): Promise<JSearchRunResult>   // manual; no-op (ok:false + message) without key or while blocked
+ *     clearSeen(): {ok:true;cleared}|{ok:false;error}  // clears only `seen` in both state files; refuses while a run is active
  *     maybeRunWeekly(): Promise<JSearchRunResult | null> // null unless configured, unblocked, last run >= 7 days ago
  *   }
  *   Types (JSearchStatus, JSearchRunSummary, JSearchRunResult) live in ./types.ts (no imports; safe for src/shared).
@@ -33,5 +34,5 @@ export {
   interpretSerpapiBody
 } from './service'
 export type { JSearchService, JSearchServiceOptions, FetchLike, ProviderAvailability } from './service'
-export type { JSearchStatus, JSearchRunSummary, JSearchRunResult, SerpapiStatus, DeepSearchProvider } from './types'
+export type { JSearchStatus, JSearchRunSummary, JSearchRunResult, SerpapiStatus, DeepSearchProvider, JSearchDropCounts } from './types'
 export { JSEARCH_SOURCE, SERPAPI_SOURCE, mapJSearchRow, mapSerpapiRow, parseRelativeAgeMs, dedupeKey } from './map'
