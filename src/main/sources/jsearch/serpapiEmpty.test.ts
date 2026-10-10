@@ -220,7 +220,7 @@ describe('JSearch zero-row diagnostics', () => {
     expect(res.summary?.fetched).toBe(0)
     expect(res.message).toContain('0 rows parsed')
     expect(res.message).toContain('keys: data, error, secret, status, zzz')
-    expect(res.message).toContain('[q1,q2,q3,q4:')
+    expect(res.message).toContain('[q1,q2,q3,q4,q5:')
     expect(res.message).not.toContain(JSKEY)
     expect(res.message).not.toContain('JS-TITLE-LEAK')
     expect(files()).not.toContain(JSKEY)

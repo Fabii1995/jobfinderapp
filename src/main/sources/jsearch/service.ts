@@ -30,12 +30,13 @@ const TIMEOUT_MS = 25_000
 /** SerpApi google_jobs can be slow (a live run timed out at 25 s), so it gets a longer per-request timeout. */
 export const SERPAPI_TIMEOUT_MS = 45_000
 
-/** Exactly one page (one credit) each. Order = priority; the run stops early if the cap would be exceeded. */
+/** JSearch: 5 queries, exactly one page (one credit) each. Order = priority; the run stops early if the cap would be exceeded. */
 export const QUERIES = [
   'junior backend developer in Israel',
   'junior QA engineer in Israel',
   'junior python developer in Israel',
-  'entry level software engineer in Israel'
+  'graduate software engineer in Israel',
+  'graduate backend engineer in Israel'
 ]
 
 /**
