@@ -17,7 +17,7 @@
  * config.json "serpapiApiKey"; a run uses exactly one provider (selectProvider: JSearch unless it is >= 170 used,
  * blocked or keyless, and SerpApi is usable). Source id "serpapi", own counter in serpapi-state.json (cap 250, user-stated).
  *
- * Behaviour: inert without a key. 1 page (1 credit) per query, per run JSearch 5 queries and SerpApi 4, persisted monthly counter in
+ * Behaviour: inert without a key. 1 page (1 credit) per query, per run JSearch 6 queries and SerpApi 4, persisted monthly counter in
  * <userDataDir>/jsearch-state.json blocks at 200, the user's plan limit (resets on a new UTC month); 401/403/429 block until next month.
  * Source id "jsearch"; externalId = job_id; links only (never fetches LinkedIn/Indeed/Glassdoor). The 3h cron must
  * not call this; only the optional daily weekly-check in the scheduler (maybeRunWeekly) and the manual button do.

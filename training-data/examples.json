@@ -126,5 +126,16 @@
     "fetchedAt": "2026-10-08T09:55:39.702Z",
     "via": "manual",
     "experienceText": "4+ years of hands-on software development experience, with a focus on backend or platform engineering."
+  },
+  {
+    "id": "manual:174072532172",
+    "url": "https://www.linkedin.com/jobs/view/4470441408",
+    "label": "fit",
+    "title": "Junior Software Engineer",
+    "company": "",
+    "location": "Tel Aviv-Yafo, Tel Aviv District",
+    "description": "Required Qualifications\nBachelor's degree in Computer Science, Software Engineering, or a related technical field from a recognized institution, or equivalent hands-on experience—including relevant technical service in Unit 8200 or Unit 81.\nStrong computer science fundamentals, including data structures, algorithms, and software engineering principles.\nProficiency in Python and TypeScript, with the ability to write clean, maintainable, production-quality code.\nExperience developing back-end systems, including APIs, services, and database-driven applications.\nWorking knowledge of front-end development and a solid understanding of client-server communication.\nStrong problem-solving and communication skills, with the ability to collaborate effectively in an on-site team environment.\nFamiliarity with Git and modern software development workflows.\nPreferred Qualifications\nExperience with robotics, embedded systems, or real-time systems.\nFamiliarity with microservices and distributed systems.\nExperience working in an agile development environment.",
+    "fetchedAt": "2026-10-10T07:18:40.258Z",
+    "via": "manual"
   }
 ]

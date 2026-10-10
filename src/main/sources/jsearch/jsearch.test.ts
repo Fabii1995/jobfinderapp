@@ -97,13 +97,13 @@ describe('jsearch: no key', () => {
 })
 
 describe('jsearch: request shape and counter', () => {
-  it('sends 5 GET search-v2 requests, one page each, with x-api-key header; counter persisted', async () => {
+  it('sends 6 GET search-v2 requests, one page each, with x-api-key header; counter persisted', async () => {
     const svc = mk()
     svc.setKey(KEY)
     const r = await svc.runDeepRefresh()
     expect(r.ok).toBe(true)
-    expect(fetchMock).toHaveBeenCalledTimes(5)
-    expect(QUERIES).toHaveLength(5)
+    expect(fetchMock).toHaveBeenCalledTimes(6)
+    expect(QUERIES).toHaveLength(6)
     const seenQueries: string[] = []
     for (const [url, init] of fetchMock.mock.calls) {
       const u = new URL(url)
@@ -115,12 +115,12 @@ describe('jsearch: request shape and counter', () => {
       expect(url).not.toContain(KEY)
     }
     expect(seenQueries).toEqual(QUERIES)
-    expect(r.summary?.requests).toBe(5)
-    expect(svc.getStatus().used).toBe(5)
-    expect(readState().used).toBe(5)
-    expect(mk().getStatus().used).toBe(5) // new instance sees persisted counter
+    expect(r.summary?.requests).toBe(6)
+    expect(svc.getStatus().used).toBe(6)
+    expect(readState().used).toBe(6)
+    expect(mk().getStatus().used).toBe(6) // new instance sees persisted counter
     await mk().runDeepRefresh()
-    expect(mk().getStatus().used).toBe(10)
+    expect(mk().getStatus().used).toBe(12)
   })
 
   it('stops mid-run before exceeding SOFT_LIMIT', async () => {
@@ -141,17 +141,18 @@ describe('jsearch: request shape and counter', () => {
     expect(mk().getStatus().used).toBe(SOFT_LIMIT)
   })
 
-  it('QUERIES is exactly the 5 expected strings, in priority order', () => {
+  it('QUERIES is exactly the 6 expected strings, in priority order', () => {
     expect([...QUERIES]).toEqual([
       'junior backend developer in Israel',
       'junior QA engineer in Israel',
       'junior python developer in Israel',
       'graduate software engineer in Israel',
-      'graduate backend engineer in Israel'
+      'graduate backend engineer in Israel',
+      'junior software engineer in Israel'
     ])
   })
 
-  it('run starting at used=169 stays on JSearch (SerpApi key present) and does 5 requests ending at 174', async () => {
+  it('run starting at used=169 stays on JSearch (SerpApi key present) and does 6 requests ending at 175', async () => {
     const svc = mk()
     svc.setKey(KEY)
     svc.setSerpapiKey('serp-key-SECRET789')
@@ -159,22 +160,35 @@ describe('jsearch: request shape and counter', () => {
     expect(svc.getStatus().activeProvider).toBe('jsearch')
     const r = await svc.runDeepRefresh()
     expect(r.summary?.provider).toBe('jsearch')
-    expect(r.summary?.requests).toBe(5)
-    expect(fetchMock).toHaveBeenCalledTimes(5)
+    expect(r.summary?.requests).toBe(6)
+    expect(fetchMock).toHaveBeenCalledTimes(6)
     for (const [url] of fetchMock.mock.calls) expect(url).toContain('api.openwebninja.com')
-    expect(svc.getStatus().used).toBe(174)
-    expect(readState().used).toBe(174)
+    expect(svc.getStatus().used).toBe(175)
+    expect(readState().used).toBe(175)
   })
 
-  it('run starting at used=195 does 5 requests ending exactly at 200', async () => {
+  it('run starting at used=194 does all 6 requests ending exactly at 200 (no early stop)', async () => {
+    const svc = mk()
+    svc.setKey(KEY)
+    writeState({ month: '2026-10', used: 194, seen: {} })
+    const r = await svc.runDeepRefresh()
+    expect(fetchMock).toHaveBeenCalledTimes(6)
+    expect(r.summary?.requests).toBe(6)
+    expect(r.message).not.toMatch(/Stopped early/)
+    expect(svc.getStatus().used).toBe(200)
+    expect(svc.getStatus().blocked).toBe(true)
+  })
+
+  it('run starting at used=195 truncates at 5 requests ending exactly at 200 and stops early', async () => {
     const svc = mk()
     svc.setKey(KEY)
     writeState({ month: '2026-10', used: 195, seen: {} })
     const r = await svc.runDeepRefresh()
     expect(fetchMock).toHaveBeenCalledTimes(5)
     expect(r.summary?.requests).toBe(5)
-    expect(r.message).not.toMatch(/Stopped early/)
+    expect(r.message).toContain('Stopped early: monthly limit reached.')
     expect(svc.getStatus().used).toBe(200)
+    expect(readState().used).toBe(200)
     expect(svc.getStatus().blocked).toBe(true)
   })
 
@@ -206,7 +220,7 @@ describe('jsearch: request shape and counter', () => {
     expect(st.blocked).toBe(false)
     const r = await svc.runDeepRefresh()
     expect(r.ok).toBe(true)
-    expect(fetchMock).toHaveBeenCalledTimes(5)
+    expect(fetchMock).toHaveBeenCalledTimes(6)
   })
 })
 
@@ -360,9 +374,9 @@ describe('jsearch: filtering', () => {
     fetchMock.mockResolvedValue(okResp([row('keep'), reject]))
     const r1 = await svc.runDeepRefresh()
     expect(r1.summary).toMatchObject({ kept: 1, inserted: 1 })
-    expect(r1.summary?.skippedDuplicates).toBe(8) // queries 2-5 return the same two ids
+    expect(r1.summary?.skippedDuplicates).toBe(10) // queries 2-6 return the same two ids
     const r2 = await mk().runDeepRefresh()
-    expect(r2.summary).toMatchObject({ kept: 0, inserted: 0, updated: 0, skippedDuplicates: 10 })
+    expect(r2.summary).toMatchObject({ kept: 0, inserted: 0, updated: 0, skippedDuplicates: 12 })
     expect(Object.keys(readState().seen as object).sort()).toEqual(['keep', 'rej'])
   })
 })
@@ -495,10 +509,10 @@ describe('jsearch: in-flight guard and weekly gate', () => {
     release()
     const [ra, rb] = await Promise.all([a, b])
     expect(ra).toBe(rb)
-    expect(fetchMock).toHaveBeenCalledTimes(5)
-    expect(svc.getStatus().used).toBe(5)
+    expect(fetchMock).toHaveBeenCalledTimes(6)
+    expect(svc.getStatus().used).toBe(6)
     await svc.runDeepRefresh() // guard released afterwards
-    expect(fetchMock).toHaveBeenCalledTimes(10)
+    expect(fetchMock).toHaveBeenCalledTimes(12)
   })
 
   it('maybeRunWeekly: <7 days null, >=7 days runs; no key / blocked null', async () => {
@@ -507,13 +521,13 @@ describe('jsearch: in-flight guard and weekly gate', () => {
     svc.setKey(KEY)
     const first = await svc.maybeRunWeekly() // never run -> runs
     expect(first?.ok).toBe(true)
-    expect(fetchMock).toHaveBeenCalledTimes(5)
+    expect(fetchMock).toHaveBeenCalledTimes(6)
     clock = NOW + 7 * DAY - 1000
     expect(await mk().maybeRunWeekly()).toBeNull()
-    expect(fetchMock).toHaveBeenCalledTimes(5)
+    expect(fetchMock).toHaveBeenCalledTimes(6)
     clock = NOW + 7 * DAY
     expect((await mk().maybeRunWeekly())?.ok).toBe(true)
-    expect(fetchMock).toHaveBeenCalledTimes(10)
+    expect(fetchMock).toHaveBeenCalledTimes(12)
 
     // blocked -> null even when due
     fetchMock.mockReset().mockResolvedValue(errResp(403))
