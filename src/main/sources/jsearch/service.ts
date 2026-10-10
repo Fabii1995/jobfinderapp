@@ -32,7 +32,10 @@ const TIMEOUT_MS = 25_000
 /** SerpApi google_jobs can be slow (a live run timed out at 25 s), so it gets a longer per-request timeout. */
 export const SERPAPI_TIMEOUT_MS = 45_000
 
-/** JSearch: 6 queries, exactly one page (one credit) each. Order = priority; the run stops early if the cap would be exceeded. */
+/**
+ * JSearch: 6 queries, one page (one credit) each, plus ONE extra page for PAGE2_QUERY only, so up to 7 requests per
+ * run (about 28/month at the weekly run). Order = priority; the run stops early if the cap would be exceeded.
+ */
 export const QUERIES = [
   'junior backend developer in Israel',
   'junior QA engineer in Israel',
@@ -41,6 +44,22 @@ export const QUERIES = [
   'graduate backend engineer in Israel',
   'junior software engineer in Israel'
 ]
+
+/** The single JSearch query that gets a second page (user decision 2026-10-10). Never more than 2 pages. */
+export const PAGE2_QUERY = 'junior software engineer in Israel'
+
+/**
+ * Next-page cursor from a JSearch search-v2 body. ASSUMPTION (live API only partly verified): pagination is via an
+ * opaque cursor, there is no `page` param. Accepted names, in order, non-empty strings only: top-level `cursor`,
+ * top-level `next_cursor`, `data.cursor`, `meta.cursor`. The value is opaque: never log or store it.
+ */
+export function extractCursor(body: unknown): string | null {
+  const rec = asRecord(body)
+  const data = rec?.data
+  const cands = [rec?.cursor, rec?.next_cursor, Array.isArray(data) ? undefined : asRecord(data)?.cursor, asRecord(rec?.meta)?.cursor]
+  for (const c of cands) if (typeof c === 'string' && c.length > 0) return c
+  return null
+}
 
 /**
  * One search per query (one request, no pagination). Queries carry no country word; Israel comes from `location`.
@@ -215,6 +234,8 @@ export function createJSearchService(opts: JSearchServiceOptions) {
   const jsStatePath = join(opts.userDataDir, 'jsearch-state.json')
   const spStatePath = join(opts.userDataDir, 'serpapi-state.json')
   let inFlight: Promise<JSearchRunResult> | null = null
+  /** Cursor of the page-2 request in flight (opaque; only used to scrub it out of error text, never stored or logged). */
+  let pageCursor: string | null = null
   /**
    * Rows dropped by filters in the current/last deep run. IN MEMORY ONLY (never written to disk, state files, logs or
    * the DB; gone on app close). Chronological (oldest first), capped at DROPPED_MAX newest. Replaced when a run
@@ -439,10 +460,12 @@ export function createJSearchService(opts: JSearchServiceOptions) {
     }
 
     const emptyNotes = new Map<string, number[]>()
-    let qIndex = 0
     let netFailed = 0
-    for (const q of queries) {
-      qIndex++
+    // Work list: one task per query; a page-2 task (cursor set) is spliced in after PAGE2_QUERY's page 1 (JSearch only).
+    const tasks: { q: string; idx: number; cursor: string | null }[] = queries.map((q, i) => ({ q, idx: i + 1, cursor: null }))
+    for (let ti = 0; ti < tasks.length; ti++) {
+      const { q, idx: qIndex, cursor } = tasks[ti]
+      pageCursor = cursor
       if (s.used >= cap) {
         stopNote = ' Stopped early: monthly limit reached.'
         break
@@ -462,7 +485,7 @@ export function createJSearchService(opts: JSearchServiceOptions) {
                 headers: { Accept: 'application/json' }
               }
             : {
-                url: `${JSEARCH_URL}?${new URLSearchParams({ query: q, num_pages: '1', date_posted: 'month', country: 'il' })}`,
+                url: `${JSEARCH_URL}?${new URLSearchParams({ query: q, num_pages: '1', date_posted: 'month', country: 'il', ...(cursor ? { cursor } : {}) })}`,
                 headers: { 'x-api-key': key, Accept: 'application/json' }
               }
         const res = await fetchImpl(req.url, {
@@ -532,6 +555,11 @@ export function createJSearchService(opts: JSearchServiceOptions) {
         if (items.length === 0) addEmptyNote(emptyNotes, qIndex, body, out.kind === 'empty')
       } else {
         const rec = asRecord(body)
+        if (q === PAGE2_QUERY && cursor === null) {
+          const next = extractCursor(body)
+          if (next) tasks.splice(ti + 1, 0, { q, idx: qIndex, cursor: next })
+          else stopNote += ' Note: page 2 unavailable: no cursor in response.'
+        }
         items = Array.isArray(rec?.data) ? rec.data : asArray(asRecord(rec?.data)?.jobs)
         if (items.length === 0) addEmptyNote(emptyNotes, qIndex, body, false)
       }
@@ -569,6 +597,7 @@ export function createJSearchService(opts: JSearchServiceOptions) {
       }
     }
 
+    pageCursor = null
     if (netFailed > 0) {
       stopNote += ` ${netFailed} of ${summary.requests} request(s) failed (network error or timeout) and were skipped.`
       if (netFailed === summary.requests) failed = true
@@ -601,6 +630,7 @@ export function createJSearchService(opts: JSearchServiceOptions) {
 
   /** Redacts both provider keys, x-api-key and api_key= (query/JSON) occurrences from an error message. */
   function scrub(msg: string): string {
+    if (pageCursor) msg = msg.split(pageCursor).join('***')
     for (const p of ['jsearch', 'serpapi'] as const) {
       const key = readKeyFor(p)
       if (key) msg = msg.split(key).join('***')

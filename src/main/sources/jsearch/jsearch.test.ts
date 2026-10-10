@@ -97,7 +97,7 @@ describe('jsearch: no key', () => {
 })
 
 describe('jsearch: request shape and counter', () => {
-  it('sends 6 GET search-v2 requests, one page each, with x-api-key header; counter persisted', async () => {
+  it('sends 6 GET search-v2 requests (no cursor in the mocked response, so no page 2), with x-api-key header; counter persisted', async () => {
     const svc = mk()
     svc.setKey(KEY)
     const r = await svc.runDeepRefresh()
@@ -152,7 +152,7 @@ describe('jsearch: request shape and counter', () => {
     ])
   })
 
-  it('run starting at used=169 stays on JSearch (SerpApi key present) and does 6 requests ending at 175', async () => {
+  it('run starting at used=169 stays on JSearch (SerpApi key present) and does 6 requests (no cursor, so no page 2) ending at 175', async () => {
     const svc = mk()
     svc.setKey(KEY)
     svc.setSerpapiKey('serp-key-SECRET789')
@@ -167,7 +167,7 @@ describe('jsearch: request shape and counter', () => {
     expect(readState().used).toBe(175)
   })
 
-  it('run starting at used=194 does all 6 requests ending exactly at 200 (no early stop)', async () => {
+  it('run starting at used=194 does all 6 requests (no cursor; page-2 cap cases are in page2.test.ts) ending exactly at 200 (no early stop)', async () => {
     const svc = mk()
     svc.setKey(KEY)
     writeState({ month: '2026-10', used: 194, seen: {} })

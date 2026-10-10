@@ -181,7 +181,7 @@ describe('run counts add up: JSearch', () => {
     writeCfg({ jsearchApiKey: JSKEY })
     fetchMock.mockImplementation(async () => jsOk([jsRow(undefined)]))
     const first = await mk().runDeepRefresh()
-    // every one of the 6 queries returns the id-less row
+    // (no cursor mocked, so no page 2) every one of the 6 queries returns the id-less row
     expect(first.summary).toMatchObject({ fetched: 6, kept: 0, seenSkipped: 0 })
     expect(first.summary!.dropped.invalid).toBe(6)
     expect(Object.keys(readJson('jsearch-state.json').seen as object)).toHaveLength(0)
