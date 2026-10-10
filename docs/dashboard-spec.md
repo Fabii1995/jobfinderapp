@@ -359,6 +359,57 @@ States:
 
 Keyboard and focus: opening the confirm moves focus to **Clear** (the primary action; Cancel is one Tab/Shift+Tab away; Enter/Space on Clear confirms). Esc anywhere in the confirm cancels it (not while pending). Cancel and Esc return focus to the "Clear seen jobs" trigger. On success or error the confirm unmounts and focus returns to the trigger (never lost to `body`), and the message is announced by its live region without moving focus. Tab order: Deep refresh -> Clear seen jobs (or, while open, Clear -> Cancel) -> remaining content. If the trigger is disabled at the moment focus must return (a run started), focus goes to the Deep refresh button instead.
 
+### 10.6b Recently dropped list
+Purpose: let the user see which jobs the last run rejected and why, so the counts in 10.6 are inspectable. Placement: inside `DeepSearchPanel`, directly under the Last run block and above the "Clear seen jobs" row (10.6a). No dialog, no new primitives (plain `button`, native `select`, `ul`).
+
+**Data (new field needed from main/Frontend, not invented in the UI).** A list of dropped rows, in memory only, max 100, newest first: `DroppedJob = {title: string, company: string, location: string, reason: 'location'|'old'|'noJuniorSignal'|'scoreTooLow'|'duplicate'|'invalid', score: number | null, provider: 'jsearch'|'serpapi', runAt: string /* ISO */}`. Reason keys are the same as `dropped` in 10.6. `score` is null when the job was rejected before scoring (e.g. location, old, invalid). Delivered via status or a dedicated IPC read (Frontend's choice); the UI treats it as optional/absent as "empty". It never contains keys.
+
+**Lifecycle.**
+- In memory only: lost on app restart (not persisted to the DB or userData). The list is the drops of the most recent runs, capped at 100 total, newest first (a new run's drops go on top, the oldest fall off).
+- Refreshes after each run finishes (same moment the status query is invalidated; not during the run, so no flicker mid-run).
+- "Clear seen jobs" (10.6a) leaves the list intact; it must not invalidate or empty it.
+- Rows skipped as already seen were never evaluated this run, so there is no title/company/score to show: they are counted in "Skipped N already seen" (10.6) but never listed. This is stated in the panel (see note below).
+- All fields are rendered as plain text React children (no `dangerouslySetInnerHTML`); apply `stripHtml` to title, company and location (RULES.md renderer hardening). Titles are never links and never open anything (no `<a href>`; these jobs were rejected).
+
+**Structure.**
+```
+<div data-testid="deepsearch-dropped" class="flex flex-col gap-2">
+  <h4 class="text-xs font-semibold"> <button type="button" id="deepsearch-dropped-toggle"
+       aria-expanded aria-controls="deepsearch-dropped-panel" data-testid="deepsearch-dropped-toggle"
+       class="flex items-center gap-1 rounded-md ... focus ring (section 5)">
+       <ChevronRight|ChevronDown aria-hidden/> Recently dropped ({N}) </button></h4>
+  <div id="deepsearch-dropped-live" data-testid="deepsearch-dropped-live" aria-live="polite" aria-atomic="true" class="sr-only"> (always mounted) </div>
+  <div id="deepsearch-dropped-panel" role="region" aria-labelledby="deepsearch-dropped-toggle" hidden when collapsed> ... </div>
+</div>
+```
+- The header is a real `button` (inside an `h4` so it appears in the heading outline), toggled by click, Enter and Space. `aria-expanded` is true/false, `aria-controls` points at the panel. Default: collapsed on every mount (the list is secondary to the counts). The chevron is decorative (`aria-hidden`) and also swaps icon (not color) with state. `{N}` is the total number of stored rows (not the filtered count), `Recently dropped (0)` when empty. The button is always rendered, also with no key and "Not run yet".
+- Collapsed: the panel is `hidden` (not rendered visibly, removed from tab order); the live region stays mounted.
+- **Live count.** The `aria-live="polite"` (`aria-atomic="true"`) element is rendered always, expanded or not, and is `sr-only` so it does not duplicate the visible count. Text: "{N} recently dropped jobs" (singular "1 recently dropped job"); while a reason filter is active and the panel is open: "Showing {shown} of {N} dropped jobs". It is updated only on run completion and on filter change, never on mount (empty initial text, then set), so opening the panel or restarting does not announce. It is the only live region for this feature (no toast).
+
+**Panel content (expanded), in order.**
+1. Controls row (`flex flex-wrap items-center gap-2`): visible `<label for="deepsearch-dropped-filter" class="text-xs">Reason</label>` + native `<select id="deepsearch-dropped-filter" data-testid="deepsearch-dropped-filter" class="h-8 ...">` styled like `Input` (border token incl. `dark:border-white/30`, shared focus ring). Options, value -> label (labels match the 10.6 drop-count wording, sentence-cased): `all` "All", `location` "Location", `old` "Too old", `noJuniorSignal` "No junior signal", `scoreTooLow` "Score too low", `duplicate` "Duplicate", `invalid` "Invalid". Default "All"; the filter persists across collapse/expand while the panel is mounted and is not saved across restarts. A native select is used for free keyboard and screen-reader behavior; no combobox.
+2. Note (`<p id="deepsearch-dropped-note" class="text-xs text-muted-foreground">`, always visible when expanded, referenced by the list's `aria-describedby`): "Jobs skipped as already seen are not listed (they were not re-checked). This list is kept in memory only and is cleared when the app restarts."
+3. List: `<ul role="list" aria-label="Recently dropped jobs" aria-describedby="deepsearch-dropped-note" data-testid="deepsearch-dropped-list" class="flex max-h-64 flex-col divide-y overflow-y-auto rounded-md border">`; `tabindex="0"` on the `ul` only because it scrolls (so keyboard users can scroll it; shared focus ring). Each row is `<li data-testid="deepsearch-dropped-row" class="flex flex-col gap-0.5 px-2 py-1.5 text-xs">`, compact (about 2 lines), same density as job rows (3.2) but smaller:
+   - Line 1: title (`font-medium`, `truncate` with the full text in `title`, never the only place) and, right-aligned, the score `tabular-nums`: "Score {n}" or "No score" when `score` is null (text, never a bare dash or color alone).
+   - Line 2 (`text-muted-foreground`, `flex flex-wrap gap-x-2`): company, then location, then reason as text "Reason: {label}" using the select's labels, then relative run time ("{relative}" with the ISO in `title`). Provider shown as plain text "JSearch" / "SerpApi" at the end of the line. Missing company/location: omit the segment (never "undefined" or an empty separator). Separators are text-safe (a middle dot `aria-hidden` between segments).
+   - Not a table: a list is used so wrapping at 900px works without horizontal scroll; the row's accessible name reads in the order title, score, company, location, reason, provider, time.
+4. Rows keep newest-first order, filtering preserves it. Max 100 rows rendered (no virtualization needed).
+
+**States.**
+| State | UI (panel expanded) |
+|---|---|
+| Never run / app restarted / no drops | Empty-state text, exactly: "Nothing dropped in the last run, or the app was restarted since" (`<p class="text-xs text-muted-foreground">`, shown instead of the list; select disabled; header "Recently dropped (0)") |
+| Filter matches nothing (list non-empty) | "No dropped jobs match this reason." in place of the list; select enabled so the user can change it; live count "Showing 0 of {N} dropped jobs" |
+| Run in progress | Previous list stays as is; a small "Updating after this run..." muted text (`text-xs`, part of the panel, not a live region) with `aria-busy="true"` on the panel; no skeleton rows (the list is stable, only refreshed on finish) |
+| Status or list load error | The list region shows "Couldn't load the dropped list." (muted, no destructive alert, it is secondary); the rest of the panel is unaffected |
+| Collapsed | Only the header button (with count) and the sr-only live region are present |
+
+**Responsive and theme.** At 900px the list is full width, line 2 wraps, no horizontal scroll; list height is capped (`max-h-64`) so the panel scroll stays on the Companies wrapper, plus the list's own scroll for 100 rows. All colors via tokens; text >= 4.5:1 in light and dark; no hover-only affordance (every control is a visible button or select). Reduced motion: the chevron swap has no animation, expand/collapse is instant.
+
+**Keyboard.** Tab order: ... Deep refresh -> Last run (not focusable) -> "Recently dropped" button -> (expanded) reason select -> list (only because it scrolls) -> "Clear seen jobs" -> remaining content. Enter/Space toggles the button; focus stays on the button after toggling. Collapsing while focus is inside the panel moves focus to the button. Esc does not collapse (no overlay).
+
+**testids:** `deepsearch-dropped`, `deepsearch-dropped-toggle`, `deepsearch-dropped-filter`, `deepsearch-dropped-list`, `deepsearch-dropped-row`, `deepsearch-dropped-empty`, `deepsearch-dropped-live`.
+
 ### 10.7 Deep-search jobs in the lists
 Same row design and density in New and Visited (3.2), no extra columns. In the `JobCell` meta line, after the company, a `Badge variant="outline" px-1.5 py-0 text-[11px] font-normal` `data-testid="via-badge"`:
 - **"via LinkedIn"** only for deep-search rows (either provider) whose URL host is linkedin.com or a subdomain;
@@ -400,4 +451,5 @@ Same row design and density in New and Visited (3.2), no extra columns. In the `
 - [ ] A seeded deep-search job with a linkedin.com URL shows "via LinkedIn" in both New and Visited, same row height as other rows; a non-LinkedIn SerpApi row shows "via Google Jobs"; the open goes through `jobs:open` only (no `<a href>`).
 - [ ] Last run with `seenSkipped`/`dropped`: shows "Skipped N already seen." and "Dropped: ..." listing only non-zero reasons in the order location, old, no junior signal, score too low, duplicate, invalid, then "Kept K: I new, U updated."; all-zero drops omit the Dropped sentence; a summary without those fields shows the old "duplicates skipped" wording and no "undefined"/NaN.
 - [ ] Clear seen jobs: click opens the inline confirm with focus on "Clear"; Esc and Cancel close it and return focus to the trigger; confirming shows "Cleared N remembered jobs" (including 0) in a `role="status"`; `{ok:false}` shows the error in a `role="alert"`; trigger and Clear are disabled while a deep refresh runs or while clearing; quota counters, keys and saved jobs are unchanged afterwards.
+- [ ] Recently dropped (10.6b): header is a button with `aria-expanded` (collapsed by default) and shows "(N)"; the sr-only `aria-live="polite"` region is mounted while collapsed; the select filters by All/Location/Too old/No junior signal/Score too low/Duplicate/Invalid; rows show title, company, reason, score ("No score" for null) as plain text; empty state reads exactly "Nothing dropped in the last run, or the app was restarted since"; the already-seen/in-memory note is visible; the list updates after a run finishes and survives "Clear seen jobs".
 - [ ] axe 0 serious/critical on the Companies tab in light and dark at 900x600 and 1280x800 for every state in 10.8 (including the Clear seen confirm open).

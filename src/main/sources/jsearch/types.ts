@@ -25,6 +25,24 @@ export interface JSearchDropCounts {
   invalid: number
 }
 
+export type DroppedReason = keyof JSearchDropCounts
+
+/**
+ * One row dropped by a filter during a deep refresh. In-memory only (main process; never persisted or logged).
+ * Text fields are stripHtml'd and truncated to 160 chars. No description, URL or key is ever stored.
+ */
+export interface DroppedJob {
+  title: string
+  company: string
+  location: string
+  reason: DroppedReason
+  /** Relevance score, only when it was computed (null for invalid/old/location drops). */
+  score: number | null
+  provider: DeepSearchProvider
+  /** ISO timestamp of the run start. */
+  runAt: string
+}
+
 export type DeepSearchProvider = 'jsearch' | 'serpapi'
 
 /** SerpApi (Google Jobs) fallback provider status. Never contains the key. */

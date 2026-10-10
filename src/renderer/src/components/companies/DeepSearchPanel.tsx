@@ -1,17 +1,31 @@
 import { useEffect, useRef, useState } from 'react'
-import { AlertTriangle, Check, Loader2, Radar, RotateCcw } from 'lucide-react'
+import { AlertTriangle, Check, ChevronDown, ChevronRight, Loader2, Radar, RotateCcw } from 'lucide-react'
 import { Alert, AlertDescription, AlertTitle } from '@renderer/components/ui/alert'
 import { Badge } from '@renderer/components/ui/badge'
 import { Button } from '@renderer/components/ui/button'
 import { Input } from '@renderer/components/ui/input'
 import { Skeleton } from '@renderer/components/ui/skeleton'
-import { useDeepSearchMutations, useDeepSearchStatus } from '@renderer/hooks/useDeepSearch'
+import { useDeepSearchMutations, useDeepSearchStatus, useDroppedList } from '@renderer/hooks/useDeepSearch'
 import { useNow } from '@renderer/hooks/useNow'
-import { formatLastRun, formatUtcDate, nextMonthStart, providerName } from '@renderer/lib/jsearch'
+import {
+  cleanDroppedText,
+  DROPPED_FILTER_OPTIONS,
+  droppedLiveText,
+  filterDropped,
+  formatDroppedScore,
+  formatDroppedTime,
+  formatLastRun,
+  formatUtcDate,
+  nextMonthStart,
+  providerName,
+  reasonLabel,
+  type DroppedFilter
+} from '@renderer/lib/jsearch'
 import { formatAbsolute, formatRelative } from '@renderer/lib/time'
 import {
   MAX_API_KEY_LENGTH,
   type DeepSearchProvider,
+  type DroppedJob,
   type JSearchSetKeyResult,
   type JSearchStatus
 } from '@renderer/lib/types'
@@ -543,6 +557,159 @@ function ClearSeen({
   )
 }
 
+function DroppedRow({ job, now }: { job: DroppedJob; now: number }): React.JSX.Element {
+  const title = cleanDroppedText(job.title) || 'Untitled'
+  const company = cleanDroppedText(job.company)
+  const location = cleanDroppedText(job.location)
+  const when = formatDroppedTime(job.runAt, now)
+  const segments: React.ReactNode[] = []
+  if (company) segments.push(<span key="c">{company}</span>)
+  if (location) segments.push(<span key="l">{location}</span>)
+  segments.push(<span key="r">Reason: {reasonLabel(job.reason)}</span>)
+  if (when) {
+    segments.push(
+      <span key="t" title={job.runAt}>
+        {when}
+      </span>
+    )
+  }
+  segments.push(<span key="p">{providerName(job.provider)}</span>)
+  return (
+    <li data-testid="deepsearch-dropped-row" className="flex flex-col gap-0.5 px-2 py-1.5 text-xs">
+      <div className="flex items-baseline justify-between gap-2">
+        <span className="min-w-0 truncate font-medium" title={title}>
+          {title}
+        </span>
+        <span className="shrink-0 tabular-nums">{formatDroppedScore(job.score)}</span>
+      </div>
+      <div className="flex flex-wrap gap-x-2 text-muted-foreground">
+        {segments.map((seg, i) => (
+          <span key={i} className="flex gap-x-2">
+            {i > 0 && <span aria-hidden="true">&middot;</span>}
+            {seg}
+          </span>
+        ))}
+      </div>
+    </li>
+  )
+}
+
+function DroppedSection({ running }: { running: boolean }): React.JSX.Element {
+  const q = useDroppedList()
+  const now = useNow()
+  const [open, setOpen] = useState(false)
+  const [filter, setFilter] = useState<DroppedFilter>('all')
+  const [live, setLive] = useState('')
+  const list = q.data
+  const total = list?.length ?? 0
+  const rows = filterDropped(list, filter)
+  const seen = useRef<unknown>(undefined)
+
+  // Announce only when a run (or other refetch) changes the data after mount, never on first load.
+  useEffect(() => {
+    if (!list) return
+    if (seen.current === undefined) {
+      seen.current = list
+      return
+    }
+    if (seen.current !== list) {
+      seen.current = list
+      setLive(droppedLiveText(list.length, filterDropped(list, filter).length, filter, open))
+    }
+  }, [list, filter, open])
+
+  return (
+    <div data-testid="deepsearch-dropped" className="flex flex-col gap-2">
+      <h4 className="text-xs font-semibold">
+        <button
+          type="button"
+          id="deepsearch-dropped-toggle"
+          data-testid="deepsearch-dropped-toggle"
+          aria-expanded={open}
+          aria-controls="deepsearch-dropped-panel"
+          onClick={() => setOpen((o) => !o)}
+          className="flex items-center gap-1 rounded-md outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+        >
+          {open ? (
+            <ChevronDown className="size-3.5" aria-hidden="true" />
+          ) : (
+            <ChevronRight className="size-3.5" aria-hidden="true" />
+          )}
+          Recently dropped ({total})
+        </button>
+      </h4>
+      <div
+        id="deepsearch-dropped-live"
+        data-testid="deepsearch-dropped-live"
+        aria-live="polite"
+        aria-atomic="true"
+        className="sr-only"
+      >
+        {live}
+      </div>
+      <div
+        id="deepsearch-dropped-panel"
+        role="region"
+        aria-labelledby="deepsearch-dropped-toggle"
+        aria-busy={running || undefined}
+        hidden={!open}
+        className="flex flex-col gap-2"
+      >
+        <div className="flex flex-wrap items-center gap-2">
+          <label htmlFor="deepsearch-dropped-filter" className="text-xs">
+            Reason
+          </label>
+          <select
+            id="deepsearch-dropped-filter"
+            data-testid="deepsearch-dropped-filter"
+            value={filter}
+            disabled={total === 0}
+            onChange={(e) => {
+              const f = e.target.value as DroppedFilter
+              setFilter(f)
+              setLive(droppedLiveText(total, filterDropped(list, f).length, f, open))
+            }}
+            className="h-8 rounded-md border border-input bg-transparent px-2 text-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-50 dark:border-white/30"
+          >
+            {DROPPED_FILTER_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+          {running && <span className="text-xs text-muted-foreground">Updating after this run...</span>}
+        </div>
+        <p id="deepsearch-dropped-note" className="text-xs text-muted-foreground">
+          Jobs skipped as already seen are not listed (they were not re-checked). This list is kept in memory
+          only and is cleared when the app restarts.
+        </p>
+        {q.isError ? (
+          <p className="text-xs text-muted-foreground">Couldn&apos;t load the dropped list.</p>
+        ) : total === 0 ? (
+          <p data-testid="deepsearch-dropped-empty" className="text-xs text-muted-foreground">
+            Nothing dropped in the last run, or the app was restarted since
+          </p>
+        ) : rows.length === 0 ? (
+          <p className="text-xs text-muted-foreground">No dropped jobs match this reason.</p>
+        ) : (
+          <ul
+            role="list"
+            tabIndex={0}
+            aria-label="Recently dropped jobs"
+            aria-describedby="deepsearch-dropped-note"
+            data-testid="deepsearch-dropped-list"
+            className="flex max-h-64 flex-col divide-y overflow-y-auto rounded-md border outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+          >
+            {rows.map((r, i) => (
+              <DroppedRow key={`${r.runAt}-${i}`} job={r} now={now} />
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
+  )
+}
+
 function Controls({ status }: { status: JSearchStatus }): React.JSX.Element {
   const mut = useDeepSearchMutations()
   const deepRefresh = mut.deepRefresh
@@ -727,6 +894,8 @@ function Controls({ status }: { status: JSearchStatus }): React.JSX.Element {
         )}
         <p>Also runs about once a week automatically. It does not run on the 3-hour refresh.</p>
       </div>
+
+      <DroppedSection running={running} />
 
       <ClearSeen running={running} runButtonRef={runButtonRef} />
     </div>

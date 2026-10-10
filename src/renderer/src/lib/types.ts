@@ -15,7 +15,9 @@ export type {
   JSearchSetKeyResult,
   JSearchClearSeenResult,
   JSearchDropped,
+  DroppedJob,
+  DroppedReason,
   SerpapiStatus,
   DeepSearchProvider
 } from '../../../shared/jsearch'
-export { MAX_API_KEY_LENGTH } from '../../../shared/jsearch'
+export { MAX_API_KEY_LENGTH, DROPPED_REASONS } from '../../../shared/jsearch'

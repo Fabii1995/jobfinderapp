@@ -5,9 +5,9 @@ import type { Db } from '../../db'
 import { jobs } from '../../db/schema'
 import { upsertJobs, type ScoredJob } from '../../jobs/upsert'
 import { classifyRoles } from '../../roles'
-import { asArray, asRecord } from '../http'
-import { dedupeKey, JSEARCH_SOURCE, mapJSearchRow, mapSerpapiRow, serpapiJobId, SERPAPI_SOURCE, type MapOutcome } from './map'
-import type { DeepSearchProvider, JSearchDropCounts, JSearchRunResult, JSearchRunSummary, JSearchStatus } from './types'
+import { asArray, asRecord, stripHtml } from '../http'
+import { dedupeKey, JSEARCH_SOURCE, mapJSearchRowInfo, mapSerpapiRowInfo, newRowInfo, serpapiJobId, SERPAPI_SOURCE, type MapOutcome } from './map'
+import type { DeepSearchProvider, DroppedJob, DroppedReason, JSearchDropCounts, JSearchRunResult, JSearchRunSummary, JSearchStatus } from './types'
 
 export const JSEARCH_URL = 'https://api.openwebninja.com/jsearch/search-v2'
 /** JSearch monthly limit: 200 is the user's plan limit; the app blocks at this many requests. */
@@ -26,6 +26,8 @@ const SEEN_MAX = 3000
 const MIN_KEY_LEN = 8
 const MAX_KEY_LEN = 512
 const ERR_TEXT_MAX = 200
+const DROPPED_MAX = 100
+const DROPPED_TEXT_MAX = 160
 const TIMEOUT_MS = 25_000
 /** SerpApi google_jobs can be slow (a live run timed out at 25 s), so it gets a longer per-request timeout. */
 export const SERPAPI_TIMEOUT_MS = 45_000
@@ -213,6 +215,24 @@ export function createJSearchService(opts: JSearchServiceOptions) {
   const jsStatePath = join(opts.userDataDir, 'jsearch-state.json')
   const spStatePath = join(opts.userDataDir, 'serpapi-state.json')
   let inFlight: Promise<JSearchRunResult> | null = null
+  /**
+   * Rows dropped by filters in the current/last deep run. IN MEMORY ONLY (never written to disk, state files, logs or
+   * the DB; gone on app close). Chronological (oldest first), capped at DROPPED_MAX newest. Replaced when a run
+   * actually starts fetching; runs refused before that (no key, blocked, no provider, already running) leave it intact.
+   */
+  let droppedList: DroppedJob[] = []
+  const dropText = (v: string): string => {
+    const t = stripHtml(v).replace(/\s+/g, ' ').trim()
+    return t.length > DROPPED_TEXT_MAX ? t.slice(0, DROPPED_TEXT_MAX) : t
+  }
+  function recordDrop(info: { title: string; company: string; location: string; score: number | null }, reason: DroppedReason, p: DeepSearchProvider, runAt: string): void {
+    droppedList.push({ title: dropText(info.title), company: dropText(info.company), location: dropText(info.location), reason, score: info.score, provider: p, runAt })
+    if (droppedList.length > DROPPED_MAX) droppedList.splice(0, droppedList.length - DROPPED_MAX)
+  }
+  /** Copy of the dropped rows of the current/last run, newest first. */
+  function getDroppedList(): DroppedJob[] {
+    return droppedList.map((d) => ({ ...d })).reverse()
+  }
 
   const CAPS: Record<DeepSearchProvider, number> = { jsearch: SOFT_LIMIT, serpapi: SERPAPI_MONTHLY_CAP }
   const LABELS: Record<DeepSearchProvider, string> = { jsearch: 'JSearch', serpapi: 'SerpApi' }
@@ -382,6 +402,8 @@ export function createJSearchService(opts: JSearchServiceOptions) {
     if (pre.blocked) return { ok: false, message: pre.reason ?? `${label} is blocked.` }
 
     const t = now()
+    const runAtIso = new Date(t).toISOString()
+    droppedList = []
     const summary: JSearchRunSummary = {
       fetched: 0,
       kept: 0,
@@ -523,19 +545,23 @@ export function createJSearchService(opts: JSearchServiceOptions) {
           }
           s.seen[id] = t
         }
-        const out: MapOutcome = p === 'serpapi' ? mapSerpapiRow(item, t) : mapJSearchRow(item, t)
+        const info = newRowInfo()
+        const out: MapOutcome = p === 'serpapi' ? mapSerpapiRowInfo(item, t, info) : mapJSearchRowInfo(item, t, info)
         if (out.kind !== 'job') {
           const d = summary.dropped
-          if (out.reason === 'invalid') d.invalid++
-          else if (out.reason === 'old') d.old++
-          else if (out.reason === 'location') d.location++
-          else if (out.reason === 'score') d.scoreTooLow++
-          else d.noJuniorSignal++
+          let why: DroppedReason
+          if (out.reason === 'invalid') (d.invalid++, (why = 'invalid'))
+          else if (out.reason === 'old') (d.old++, (why = 'old'))
+          else if (out.reason === 'location') (d.location++, (why = 'location'))
+          else if (out.reason === 'score') (d.scoreTooLow++, (why = 'scoreTooLow'))
+          else (d.noJuniorSignal++, (why = 'noJuniorSignal'))
+          recordDrop(info, why, p, runAtIso)
           continue
         }
         const dk = dedupeKey(out.job.title, out.job.company)
         if (atsKeys.has(dk) || runKeys.has(dk)) {
           summary.dropped.duplicate++
+          recordDrop({ title: out.job.title, company: out.job.company, location: out.job.location ?? '', score: out.score }, 'duplicate', p, runAtIso)
           continue
         }
         runKeys.add(dk)
@@ -689,7 +715,7 @@ export function createJSearchService(opts: JSearchServiceOptions) {
     }
   }
 
-  return { getStatus, setKey, clearKey, setSerpapiKey, clearSerpapiKey, runDeepRefresh, maybeRunWeekly, clearSeen }
+  return { getStatus, setKey, clearKey, setSerpapiKey, clearSerpapiKey, runDeepRefresh, maybeRunWeekly, clearSeen, getDroppedList }
 }
 
 export type JSearchService = ReturnType<typeof createJSearchService>

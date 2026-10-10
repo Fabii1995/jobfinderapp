@@ -1,4 +1,13 @@
-import type { DeepSearchProvider, Job, JSearchDropped, JSearchRunSummary } from './types'
+import { stripHtmlLine } from '../../../shared/text'
+import { formatRelative } from './time'
+import type {
+  DeepSearchProvider,
+  DroppedJob,
+  DroppedReason,
+  Job,
+  JSearchDropped,
+  JSearchRunSummary
+} from './types'
 
 export const JSEARCH_SOURCE = 'jsearch'
 export const SERPAPI_SOURCE = 'serpapi'
@@ -99,4 +108,49 @@ export function formatLastRun(
     filtering: sentences.length > 0 ? sentences.join(' ') : null,
     kept: `Kept ${kept}: ${inserted} new, ${updated} updated.`
   }
+}
+
+/** Filter value of the Recently dropped select. */
+export type DroppedFilter = DroppedReason | 'all'
+
+/** Select options in spec order (10.6b). */
+export const DROPPED_FILTER_OPTIONS: ReadonlyArray<{ value: DroppedFilter; label: string }> = [
+  { value: 'all', label: 'All' },
+  { value: 'location', label: 'Location' },
+  { value: 'old', label: 'Too old' },
+  { value: 'noJuniorSignal', label: 'No junior signal' },
+  { value: 'scoreTooLow', label: 'Score too low' },
+  { value: 'duplicate', label: 'Duplicate' },
+  { value: 'invalid', label: 'Invalid' }
+]
+
+/** Label for a drop reason (same wording as the select). Unknown values fall back to the raw key text. */
+export function reasonLabel(reason: DroppedReason | 'all'): string {
+  return DROPPED_FILTER_OPTIONS.find((o) => o.value === reason)?.label ?? String(reason)
+}
+
+/** Keeps order (newest first). 'all' (or an unknown filter) returns a copy of everything. */
+export function filterDropped(list: readonly DroppedJob[] | null | undefined, reason: DroppedFilter): DroppedJob[] {
+  const rows = Array.isArray(list) ? list : []
+  return reason === 'all' ? [...rows] : rows.filter((r) => r.reason === reason)
+}
+
+/** "Score 72" or "No score" (null/NaN/non-number). Never a bare dash. */
+export function formatDroppedScore(score: number | null | undefined): string {
+  return typeof score === 'number' && Number.isFinite(score) ? `Score ${Math.round(score)}` : 'No score'
+}
+
+/** Relative run time for a row's ISO runAt, or '' when unparseable. */
+export function formatDroppedTime(runAt: string, now: number): string {
+  const t = Date.parse(runAt)
+  return Number.isFinite(t) ? formatRelative(t, now) : ''
+}
+
+/** Plain text for display: markup stripped, one line. */
+export const cleanDroppedText = (v: unknown): string => (typeof v === 'string' ? stripHtmlLine(v) : '')
+
+/** sr-only live text: "N recently dropped jobs", or "Showing X of N dropped jobs" while a filter is active and the panel is open. */
+export function droppedLiveText(total: number, shown: number, filter: DroppedFilter, open: boolean): string {
+  if (open && filter !== 'all') return `Showing ${shown} of ${total} dropped jobs`
+  return `${total} recently dropped ${total === 1 ? 'job' : 'jobs'}`
 }

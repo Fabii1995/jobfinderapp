@@ -73,4 +73,30 @@ export type JSearchSetKeyResult = { ok: true } | { ok: false; error: string }
 
 export type JSearchClearSeenResult = { ok: true; cleared: number } | { ok: false; error: string }
 
+export type DroppedReason = keyof JSearchDropped
+
+/** One job rejected by a filter in a recent deep refresh (in memory in main only). Mirrors main/sources/jsearch/types.ts DroppedJob. */
+export interface DroppedJob {
+  title: string
+  company: string
+  location: string
+  reason: DroppedReason
+  /** null when the job was rejected before scoring. */
+  score: number | null
+  provider: DeepSearchProvider
+  /** ISO timestamp of the run start. */
+  runAt: string
+}
+
+export const DROPPED_LIST_MAX = 100
+export const DROPPED_TEXT_MAX = 160
+export const DROPPED_REASONS: readonly DroppedReason[] = [
+  'location',
+  'old',
+  'noJuniorSignal',
+  'scoreTooLow',
+  'duplicate',
+  'invalid'
+]
+
 export const MAX_API_KEY_LENGTH = 256

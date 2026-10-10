@@ -22,7 +22,8 @@ const api: JobFinderApi = {
     setSerpapiKey: (key) => ipcRenderer.invoke(IPC.jsearchSetSerpapiKey, key),
     clearSerpapiKey: () => ipcRenderer.invoke(IPC.jsearchClearSerpapiKey),
     deepRefresh: () => ipcRenderer.invoke(IPC.jsearchDeepRefresh),
-    clearSeen: () => ipcRenderer.invoke(IPC.jsearchClearSeen)
+    clearSeen: () => ipcRenderer.invoke(IPC.jsearchClearSeen),
+    droppedList: () => ipcRenderer.invoke(IPC.jsearchDroppedList)
   },
   onChanged: (cb) => {
     const listener = (): void => cb()

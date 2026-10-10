@@ -1,8 +1,13 @@
 import { ipcMain } from 'electron'
 import type { JSearchService } from './sources/jsearch'
 import { IPC } from '../shared/ipc'
+import { stripHtmlLine } from '../shared/text'
 import {
+  DROPPED_LIST_MAX,
+  DROPPED_REASONS,
+  DROPPED_TEXT_MAX,
   MAX_API_KEY_LENGTH,
+  type DroppedJob,
   type JSearchClearSeenResult,
   type JSearchRunResult,
   type JSearchSetKeyResult
@@ -52,6 +57,35 @@ export function createDeepRunner(service: JSearchService, notify: () => void) {
   return { deepRefresh, maybeRunWeekly, isRunning }
 }
 
+const clip = (v: unknown): string => {
+  const t = typeof v === 'string' ? stripHtmlLine(v) : ''
+  return t.length > DROPPED_TEXT_MAX ? t.slice(0, DROPPED_TEXT_MAX) : t
+}
+
+/** Defensive re-shape of service rows: drops malformed ones, strips markup, truncates text, caps the count. */
+export function sanitizeDroppedList(rows: unknown): DroppedJob[] {
+  if (!Array.isArray(rows)) return []
+  const out: DroppedJob[] = []
+  for (const r of rows) {
+    if (out.length >= DROPPED_LIST_MAX) break
+    if (!r || typeof r !== 'object') continue
+    const o = r as Record<string, unknown>
+    if (typeof o.reason !== 'string' || !(DROPPED_REASONS as readonly string[]).includes(o.reason)) continue
+    if (o.provider !== 'jsearch' && o.provider !== 'serpapi') continue
+    if (typeof o.runAt !== 'string' || !Number.isFinite(Date.parse(o.runAt))) continue
+    out.push({
+      title: clip(o.title),
+      company: clip(o.company),
+      location: clip(o.location),
+      reason: o.reason as DroppedJob['reason'],
+      score: typeof o.score === 'number' && Number.isFinite(o.score) ? o.score : null,
+      provider: o.provider,
+      runAt: o.runAt.slice(0, 40)
+    })
+  }
+  return out
+}
+
 export function registerJSearchIpc(
   service: JSearchService,
   runner: ReturnType<typeof createDeepRunner>
@@ -96,6 +130,14 @@ export function registerJSearchIpc(
       return { ok: false, error: typeof res.error === 'string' && res.error ? res.error : 'Could not clear seen jobs.' }
     } catch {
       return { ok: false, error: 'Could not clear seen jobs.' }
+    }
+  })
+  ipcMain.handle(IPC.jsearchDroppedList, (_e, ...args: unknown[]): DroppedJob[] => {
+    if (args.length > 0) return []
+    try {
+      return sanitizeDroppedList(service.getDroppedList())
+    } catch {
+      return []
     }
   })
 }

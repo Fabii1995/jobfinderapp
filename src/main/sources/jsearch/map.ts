@@ -30,6 +30,16 @@ export function dedupeKey(title: string | null | undefined, company: string | nu
   return `${norm(title ?? '').replace(/\s+/g, ' ')}|${co}`
 }
 
+/** Display fields of a row, filled while mapping so the service can record why it was dropped (no description/URL). */
+export interface RowInfo {
+  title: string
+  company: string
+  location: string
+  /** Set only when scoreJob actually ran. */
+  score: number | null
+}
+export const newRowInfo = (): RowInfo => ({ title: '', company: '', location: '', score: null })
+
 export type MapOutcome =
   | { kind: 'job'; job: RawJob; score: number }
   | { kind: 'drop'; reason: 'invalid' | 'old' | 'location' | 'score' | 'no-junior-signal' }
@@ -43,10 +53,18 @@ export function hasJuniorSignal(title: string, description: string | null): bool
 
 /** Maps one raw JSearch row to a RawJob; all text is untrusted and goes through stripHtml. Pure. */
 export function mapJSearchRow(row: unknown, nowMs: number): MapOutcome {
+  return mapJSearchRowInfo(row, nowMs, newRowInfo())
+}
+
+/** Same as mapJSearchRow but also fills `info` (title/company/location/score) as far as the row got. */
+export function mapJSearchRowInfo(row: unknown, nowMs: number, info: RowInfo): MapOutcome {
   const r = asRecord(row)
   if (!r) return { kind: 'drop', reason: 'invalid' }
   const id = asString(r.job_id)
   const title = cleanTitle(r.job_title)
+  info.title = title
+  info.company = stripHtml(asString(r.employer_name) ?? '')
+  info.location = stripHtml(asString(r.job_location) ?? [asString(r.job_city), asString(r.job_country)].filter(Boolean).join(', '))
   const link = asString(r.job_apply_link) ?? asString(r.job_google_link)
   if (!id || !title || !link || !/^https?:\/\//i.test(link)) return { kind: 'drop', reason: 'invalid' }
 
@@ -75,13 +93,14 @@ export function mapJSearchRow(row: unknown, nowMs: number): MapOutcome {
     workMode: loc.workMode,
     postedAt
   }
-  return finalizeJob(job)
+  return finalizeJob(job, info)
 }
 
 /** Shared gate for every aggregator row: Israel on-site/hybrid, score >= MIN_SCORE, real junior signal. */
-export function finalizeJob(job: RawJob): MapOutcome {
+export function finalizeJob(job: RawJob, info?: RowInfo): MapOutcome {
   if (!isKeepableLocation(job)) return { kind: 'drop', reason: 'location' }
   const score = scoreJob(job)
+  if (info) info.score = score
   if (score < MIN_SCORE) return { kind: 'drop', reason: 'score' }
   if (!hasJuniorSignal(job.title, job.description)) return { kind: 'drop', reason: 'no-junior-signal' }
   return { kind: 'job', job, score }
@@ -194,10 +213,18 @@ function serpapiLink(r: Record<string, unknown>): string | null {
 
 /** Maps one raw SerpApi Google Jobs row to a RawJob. Untrusted text goes through stripHtml. Pure. */
 export function mapSerpapiRow(row: unknown, nowMs: number): MapOutcome {
+  return mapSerpapiRowInfo(row, nowMs, newRowInfo())
+}
+
+/** Same as mapSerpapiRow but also fills `info` (title/company/location/score) as far as the row got. */
+export function mapSerpapiRowInfo(row: unknown, nowMs: number, info: RowInfo): MapOutcome {
   const r = asRecord(row)
   if (!r) return { kind: 'drop', reason: 'invalid' }
   const id = serpapiJobId(r)
   const title = serpapiTitle(r)
+  info.title = title
+  info.company = stripHtml(serpapiCompanyRaw(r) ?? '')
+  info.location = stripHtml(serpapiLocationRaw(r) ?? '')
   const link = serpapiLink(r)
   if (!id || !title || !link) return { kind: 'drop', reason: 'invalid' }
 
@@ -226,5 +253,5 @@ export function mapSerpapiRow(row: unknown, nowMs: number): MapOutcome {
     city: loc.city,
     workMode: loc.workMode,
     postedAt
-  })
+  }, info)
 }

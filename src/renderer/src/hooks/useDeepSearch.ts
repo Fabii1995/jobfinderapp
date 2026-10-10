@@ -5,7 +5,10 @@ import { providerName } from '@renderer/lib/jsearch'
 import type { JSearchClearSeenResult } from '@renderer/lib/types'
 import { jobKeys } from './useJobs'
 
-export const deepSearchKeys = { status: ['deepSearch', 'status'] as const }
+export const deepSearchKeys = {
+  status: ['deepSearch', 'status'] as const,
+  dropped: ['deepSearch', 'dropped'] as const
+}
 
 function message(err: unknown): string {
   const m = err instanceof Error ? err.message : String(err)
@@ -16,6 +19,16 @@ export function useDeepSearchStatus() {
   return useQuery({
     queryKey: deepSearchKeys.status,
     queryFn: () => window.api.jsearch.status(),
+    staleTime: 30_000,
+    refetchOnWindowFocus: true
+  })
+}
+
+/** In-memory list of jobs dropped by recent runs. Refetched when a run finishes, never by Clear seen. */
+export function useDroppedList() {
+  return useQuery({
+    queryKey: deepSearchKeys.dropped,
+    queryFn: () => window.api.jsearch.droppedList(),
     staleTime: 30_000,
     refetchOnWindowFocus: true
   })
@@ -52,7 +65,11 @@ export function useDeepSearchMutations() {
     deepRefresh: useMutation({
       mutationFn: () => window.api.jsearch.deepRefresh(),
       onSuccess: async (res) => {
-        await Promise.all([refreshStatus(), qc.invalidateQueries({ queryKey: jobKeys.all })])
+        await Promise.all([
+          refreshStatus(),
+          qc.invalidateQueries({ queryKey: deepSearchKeys.dropped }),
+          qc.invalidateQueries({ queryKey: jobKeys.all })
+        ])
         if (res.ok) {
           const s = res.summary
           const none = !s || (s.inserted === 0 && s.updated === 0)
@@ -68,6 +85,7 @@ export function useDeepSearchMutations() {
         }
       },
       onError: (err) => {
+        void qc.invalidateQueries({ queryKey: deepSearchKeys.dropped })
         const m = message(err)
         toast.error('Deep refresh failed', { description: m })
         setAnnounce(`Deep refresh failed: ${m}`)
