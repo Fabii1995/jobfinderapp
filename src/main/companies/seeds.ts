@@ -28,7 +28,9 @@ const GREENHOUSE: Array<[string, string]> = [
   ['Orca Security', 'orcasecurity'],
   ['BigID', 'bigid'],
   ['Optimove', 'optimove'],
-  ['Innovid', 'innovid']
+  ['Innovid', 'innovid'],
+  // EU-hosted board (job-boards.eu.greenhouse.io/wedev); the keyless boards-api answers for it (verified 200).
+  ['WeDev', 'wedev']
 ]
 
 const SEEDS: Seed[] = [
@@ -39,6 +41,7 @@ const SEEDS: Seed[] = [
   ['WalkMe', 'lever', { slug: 'walkme' }],
   ['Armis', 'smartrecruiters', { id: 'armis' }],
   ['ServiceNow', 'smartrecruiters', { id: 'ServiceNow' }],
+  ['TenenGroup', 'smartrecruiters', { id: 'TenenGroup' }],
   ['Amazon', 'amazon', {}],
   ['Lemonade', 'ashby', { name: 'lemonade' }],
   ['Finout', 'ashby', { name: 'finout' }],

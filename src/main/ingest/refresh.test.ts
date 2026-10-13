@@ -83,7 +83,7 @@ describe('refreshJobs', () => {
     const res = await refreshJobs(db, { companies: seedCompanies(), fetchCompany })
     const called = fetchCompany.mock.calls.map((c) => (c as unknown as [CompanyEntry])[0].id)
     expect(called).not.toContain('sqlink')
-    expect(called.length).toBe(36)
+    expect(called.length).toBe(38)
     expect(res.sources.some((s) => s.source === 'sqlink')).toBe(false)
   })
 })
