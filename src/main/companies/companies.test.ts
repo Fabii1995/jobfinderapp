@@ -80,9 +80,9 @@ describe('companies store', () => {
     expect(ids).toContain('comeet:c5.00d')
     expect(new Set(ids).size).toBe(ids.length)
     // every seed is enabled except SQLink (Cloudflare challenge, off by default)
-    expect(r.companies.length).toBe(39)
+    expect(r.companies.length).toBe(54)
     expect(r.companies.find((c) => c.id === 'sqlink')?.enabled).toBe(false)
-    expect(r.companies.filter((c) => c.enabled).length).toBe(38)
+    expect(r.companies.filter((c) => c.enabled).length).toBe(53)
     expect(r.companies.filter((c) => !c.enabled).map((c) => c.id)).toEqual(['sqlink'])
     const disk = JSON.parse(readFileSync(join(dir, COMPANIES_FILE), 'utf8')) as { companies: { id: string; enabled: boolean }[] }
     expect(disk.companies.find((c) => c.id === 'sqlink')?.enabled).toBe(false)
@@ -132,11 +132,11 @@ describe('companies store', () => {
     const onDisk = (file: string): { companies: { id: string; enabled?: boolean }[]; seedsApplied?: string[] } =>
       JSON.parse(readFileSync(file, 'utf8'))
 
-    it('legacy list is 26 ids, all still in seeds; 13 new', () => {
+    it('legacy list is 26 ids, all still in seeds; 28 new', () => {
       const all = seedCompanies().map((c) => c.id)
       expect(LEGACY_SEED_IDS.length).toBe(26)
       expect(LEGACY_SEED_IDS.every((id) => all.includes(id))).toBe(true)
-      expect(newIds().length).toBe(13)
+      expect(newIds().length).toBe(28)
       expect(newIds()).toContain('sqlink')
     })
 
@@ -154,7 +154,7 @@ describe('companies store', () => {
       const ids = r.companies.map((c) => c.id)
       expect(ids).not.toContain('greenhouse:wizinc')
       for (const id of newIds()) expect(ids).toContain(id)
-      expect(ids.length).toBe(kept.length + 13)
+      expect(ids.length).toBe(kept.length + 28)
       expect(r.companies.filter((c) => newIds().includes(c.id) && c.id !== 'sqlink').every((c) => c.enabled)).toBe(true)
       expect(r.companies.find((c) => c.id === 'sqlink')?.enabled).toBe(false)
       expect(onDisk(file).companies.find((c) => c.id === 'sqlink')?.enabled).toBe(false)

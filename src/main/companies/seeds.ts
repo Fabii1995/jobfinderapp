@@ -30,7 +30,15 @@ const GREENHOUSE: Array<[string, string]> = [
   ['Optimove', 'optimove'],
   ['Innovid', 'innovid'],
   // EU-hosted board (job-boards.eu.greenhouse.io/wedev); the keyless boards-api answers for it (verified 200).
-  ['WeDev', 'wedev']
+  ['WeDev', 'wedev'],
+  // Each board answered HTTP 200 on boards-api.greenhouse.io (2026-10-15, PDL company probe).
+  ['Connecteam', 'connecteam'],
+  ['Mixtiles', 'mixtiles'],
+  ['MyHeritage', 'myheritage'],
+  ['QuantHealth', 'quanthealth'],
+  ['Beamup', 'beamup'],
+  ['accessiBe', 'accessibe'],
+  ['Sweet Security', 'sweetsecurity']
 ]
 
 const SEEDS: Seed[] = [
@@ -42,6 +50,14 @@ const SEEDS: Seed[] = [
   ['Armis', 'smartrecruiters', { id: 'armis' }],
   ['ServiceNow', 'smartrecruiters', { id: 'ServiceNow' }],
   ['TenenGroup', 'smartrecruiters', { id: 'TenenGroup' }],
+  ['Kueez', 'smartrecruiters', { id: 'Kueez' }],
+  ['Rapydo', 'smartrecruiters', { id: 'Rapydo' }],
+  ['Play-perfect', 'smartrecruiters', { id: 'Play-perfect' }],
+  ['Oktopost', 'lever', { slug: 'oktopost' }],
+  ['Moon Active', 'ashby', { name: 'moonactive' }],
+  ['Loora', 'ashby', { name: 'loora' }],
+  ['Incrmntal', 'ashby', { name: 'incrmntal' }],
+  ['Stigg', 'ashby', { name: 'stigg' }],
   ['Amazon', 'amazon', {}],
   ['Lemonade', 'ashby', { name: 'lemonade' }],
   ['Finout', 'ashby', { name: 'finout' }],
