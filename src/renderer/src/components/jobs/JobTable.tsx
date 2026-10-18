@@ -8,10 +8,12 @@ import { useIsCompact } from '@renderer/hooks/useWindowWidth'
 import { useNow } from '@renderer/hooks/useNow'
 import { useOpenJob } from '@renderer/hooks/useOpenJob'
 import { SEARCH_INPUT_ID } from '@renderer/hooks/useAppEvents'
+import { sortLabel, type SortMode } from '@renderer/lib/sort'
 import { buildColumns, COLUMN_WIDTH, jobTableFeatures, type ColumnId } from './columns'
 
 interface Props {
   mode: 'new' | 'visited'
+  sort: SortMode
   /** Already filtered, in the default (server) order. */
   jobs: Job[]
 }
@@ -25,7 +27,7 @@ const SORT_LABEL: Record<string, string> = {
   visitedAt: 'visited date'
 }
 
-export function JobTable({ mode, jobs }: Props): React.JSX.Element {
+export function JobTable({ mode, sort, jobs }: Props): React.JSX.Element {
   const compact = useIsCompact()
   const now = useNow()
   const open = useOpenJob()
@@ -86,9 +88,11 @@ export function JobTable({ mode, jobs }: Props): React.JSX.Element {
   const caption = `${mode === 'new' ? 'New' : 'Visited'} jobs, sorted by ${
     sortedBy
       ? `${SORT_LABEL[sortedBy.id] ?? sortedBy.id} ${sortedBy.desc ? 'descending' : 'ascending'}`
-      : mode === 'new'
-        ? 'score, then posted date'
-        : 'most recently visited'
+      : sort !== 'default'
+        ? `${sortLabel(sort, mode).toLowerCase()} (posted date, else first seen)`
+        : mode === 'new'
+          ? 'score, then posted date'
+          : 'most recently visited'
   }`
 
   const onKeyDown = (e: React.KeyboardEvent): void => {

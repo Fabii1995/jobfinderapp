@@ -4,6 +4,7 @@ import { safeStorage } from './theme'
 import { DEFAULT_FILTERS, sanitizeFilters, type Filters, type WorkModeFilter } from '@renderer/lib/filters'
 import type { Role } from '@renderer/lib/types'
 import type { MinScore } from '@renderer/lib/score'
+import { DEFAULT_SORT, type SortMode } from '@renderer/lib/sort'
 
 export type ActiveTab = 'new' | 'visited' | 'companies'
 
@@ -11,6 +12,9 @@ interface UiState {
   activeTab: ActiveTab // not persisted (always opens on New)
   search: string // not persisted
   filters: Filters // PERSISTED
+  /** List order (Best match / Latest first / Oldest first). Session-only, not persisted. */
+  sort: SortMode
+  setSort: (s: SortMode) => void
   /** Message when the refresh call itself rejected (IPC/DB error). Not persisted. */
   refreshFailure: string | null
   /** `lastRefresh.at` whose partial-failure banner was dismissed (a newer run re-shows it). */
@@ -41,6 +45,8 @@ export const useUiStore = create<UiState>()(
       activeTab: 'new',
       search: '',
       filters: DEFAULT_FILTERS,
+      sort: DEFAULT_SORT,
+      setSort: (sort) => set({ sort }),
       refreshFailure: null,
       dismissedBannerAt: null,
       announce: '',

@@ -6,6 +6,7 @@ import { useCompanyCountsQuery } from '@renderer/hooks/useCompanies'
 import { useDebouncedValue } from '@renderer/hooks/useDebouncedValue'
 import { useUiStore } from '@renderer/store/ui'
 import { applyFilters } from '@renderer/lib/filters'
+import { sortJobs } from '@renderer/lib/sort'
 import { EmptyState } from './EmptyState'
 import { JobTable } from './JobTable'
 import { SkeletonRows } from './SkeletonRows'
@@ -21,6 +22,7 @@ export function JobsPanel({ mode, onRefresh, refreshing }: Props): React.JSX.Ele
   const statsQ = useStatsQuery()
   const filters = useUiStore((s) => s.filters)
   const search = useUiStore((s) => s.search)
+  const sort = useUiStore((s) => s.sort)
   const refreshFailure = useUiStore((s) => s.refreshFailure)
   const debouncedSearch = useDebouncedValue(search, 150)
 
@@ -32,8 +34,8 @@ export function JobsPanel({ mode, onRefresh, refreshing }: Props): React.JSX.Ele
     [countsQ.data]
   )
   const filtered = useMemo(
-    () => (all ? applyFilters(all, filters, debouncedSearch, knownCompanies) : []),
-    [all, filters, debouncedSearch, knownCompanies]
+    () => (all ? sortJobs(applyFilters(all, filters, debouncedSearch, knownCompanies), sort) : []),
+    [all, filters, debouncedSearch, knownCompanies, sort]
   )
 
   const result = (body: React.ReactNode, count?: string): React.JSX.Element => (
@@ -84,5 +86,5 @@ export function JobsPanel({ mode, onRefresh, refreshing }: Props): React.JSX.Ele
 
   const count = `Showing ${filtered.length} of ${all.length}`
   if (filtered.length === 0) return result(<EmptyState variant="filtered" />, count)
-  return result(<JobTable key={mode} mode={mode} jobs={filtered} />, count)
+  return result(<JobTable key={`${mode}:${sort}`} mode={mode} sort={sort} jobs={filtered} />, count)
 }

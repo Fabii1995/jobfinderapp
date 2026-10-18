@@ -1,4 +1,4 @@
-import { Search, X } from 'lucide-react'
+import { ArrowUpDown, Search, X } from 'lucide-react'
 import { Button } from '@renderer/components/ui/button'
 import { Input } from '@renderer/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@renderer/components/ui/select'
@@ -7,6 +7,7 @@ import { SEARCH_INPUT_ID } from '@renderer/hooks/useAppEvents'
 import { useUiStore } from '@renderer/store/ui'
 import { activeFilterCount, WORK_MODE_OPTIONS, type WorkModeFilter } from '@renderer/lib/filters'
 import { MIN_SCORE_OPTIONS, type MinScore } from '@renderer/lib/score'
+import { SORT_MODES, sanitizeSort, sortLabel } from '@renderer/lib/sort'
 import { ROLES, type Role } from '@renderer/lib/types'
 import { MultiSelectMenu } from './MultiSelectMenu'
 
@@ -21,6 +22,9 @@ export function FilterBar(): React.JSX.Element {
   const setWorkMode = useUiStore((s) => s.setWorkMode)
   const toggleRole = useUiStore((s) => s.toggleRole)
   const setMinScore = useUiStore((s) => s.setMinScore)
+  const sort = useUiStore((s) => s.sort)
+  const setSort = useUiStore((s) => s.setSort)
+  const sortTab = useUiStore((s) => (s.activeTab === 'visited' ? 'visited' : 'new'))
   const clearFilters = useUiStore((s) => s.clearFilters)
 
   const companyOptions = Object.entries(counts ?? {})
@@ -104,6 +108,19 @@ export function FilterBar(): React.JSX.Element {
           {MIN_SCORE_OPTIONS.map((n) => (
             <SelectItem key={n} value={String(n)}>
               {n === 0 ? 'Any score' : `Score ${n}+`}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      <Select value={sort} onValueChange={(v) => setSort(sanitizeSort(v))}>
+        <SelectTrigger size="sm" aria-label="Sort by" data-testid="sort-select">
+          <ArrowUpDown className="size-3.5 text-muted-foreground" aria-hidden="true" />
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {SORT_MODES.map((m) => (
+            <SelectItem key={m} value={m}>
+              {sortLabel(m, sortTab)}
             </SelectItem>
           ))}
         </SelectContent>
