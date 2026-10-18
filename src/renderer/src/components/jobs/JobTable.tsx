@@ -89,7 +89,7 @@ export function JobTable({ mode, sort, jobs }: Props): React.JSX.Element {
     sortedBy
       ? `${SORT_LABEL[sortedBy.id] ?? sortedBy.id} ${sortedBy.desc ? 'descending' : 'ascending'}`
       : sort !== 'default'
-        ? `${sortLabel(sort, mode).toLowerCase()} (posted date, else first seen)`
+        ? `${sortLabel(sort, mode).toLowerCase()}${sort.startsWith('posted') ? ' (posted date, else first seen)' : ' (when first seen by the app)'}`
         : mode === 'new'
           ? 'score, then posted date'
           : 'most recently visited'

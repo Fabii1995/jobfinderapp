@@ -12,7 +12,7 @@ interface UiState {
   activeTab: ActiveTab // not persisted (always opens on New)
   search: string // not persisted
   filters: Filters // PERSISTED
-  /** List order (Best match / Latest first / Oldest first). Session-only, not persisted. */
+  /** List order (Best match / Recently added / Oldest added / Newest posted / Oldest posted). Session-only, not persisted. */
   sort: SortMode
   setSort: (s: SortMode) => void
   /** Message when the refresh call itself rejected (IPC/DB error). Not persisted. */
