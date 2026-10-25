@@ -45,5 +45,3 @@ See `AGENTS.md` for stack, layout and commands, `RULES.md` for hard constraints,
 npm test          # Vitest
 npm run test:e2e  # Playwright-Electron (builds first)
 ```
-
-To regenerate the screenshots: `npm run build && npx tsx e2e/screenshots.capture.ts`. It uses a temporary demo profile and never touches your real data.
