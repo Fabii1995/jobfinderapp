@@ -94,7 +94,7 @@ Requirements:
 Items:
 - [x] (1) (job-search) Feasibility research with live counts per ATS/board. Outcome: HireMeTech NOT built (robots.txt Disallow /api/, job data only reachable via /api, client-rendered, terms unreadable). Workable not implemented. Hebrew boards (AllJobs/Drushim/JobMaster) not built.
 - [x] (2) (job-search) Backend: schema migration (country/city/work_mode; purges only UNVISITED rows of the removed remote sources, explicitly approved here for that one migration; `visitedAt` untouched; idempotent) and `RawJob` update. Migration test 7b passes.
-- [x] (3) (job-search) Backend connectors in `src/main/sources/`: Amazon, Workday (NVIDIA/Intel/Salesforce), Greenhouse, Comeet, Lever, SmartRecruiters, Ashby, SQLink. Editable company list in userData; seed list now 37 (26 original + 11 new: SQLink, Torq, Apiiro, Cymulate, Salt Security, Orca, BigID, Optimove, Innovid, Lemonade, Finout) with an additive seed merge (`seedsApplied`) so existing installs get new seeds without resurrecting removed ones or overwriting edits. SQLink was ON per the user at the time (its terms page could not be located/read: KNOWN RISK); it is now seeded OFF by default because Cloudflare blocks automated requests with 403 (see Phase 7b open, RESOLVED SQLink 403).
+- [x] (3) (job-search) Backend connectors in `src/main/sources/`: Amazon, Workday (NVIDIA/Intel/Salesforce), Greenhouse, Comeet, Lever, SmartRecruiters, Ashby, SQLink. Editable company list in userData; seed list was 37 at this point (26 original + 11 new: SQLink, Torq, Apiiro, Cymulate, Salt Security, Orca, BigID, Optimove, Innovid, Lemonade, Finout; NOW 54, see Phase 7e; dated records below that say 37 are historical) with an additive seed merge (`seedsApplied`) so existing installs get new seeds without resurrecting removed ones or overwriting edits. SQLink was ON per the user at the time (its terms page could not be located/read: KNOWN RISK); it is now seeded OFF by default because Cloudflare blocks automated requests with 403 (see Phase 7b open, RESOLVED SQLink 403).
 - [x] (4) (job-search) Israel-only location filter (remote-only excluded, no bare "IL") and scoring/roles update: senior etc. in title = 0; new grad/Associate count; 1+ years counts; 2+ neutral (superseded in Phase 8: now -10); no-experience-stated software title ~30-40; 3+ penalty; student/intern capped; Hebrew support incl. apostrophe variants; firmware/embedded keywords.
 - [x] (5) (job-search) Removed Arbeitnow, RemoteOK, Himalayas (sources and tests). Docs references cleaned up in the Phase 9a doc pass.
 - [x] (6) (frontend) IPC for new data; work-mode and company filters; Companies tab with paste-URL add + enable/remove; per-company failure summary; empty state. Verified in the built app by frontend (live add of Stripe; bad URLs rejected).
@@ -157,6 +157,33 @@ Status: BUILT 2026-10-08, never run against the live API. User decision (2026-10
 - Still unverified: whether the param change fixes the 400, the real SerpApi `error` JSON shape, live run. The next real run's message will show SerpApi's actual error text. Nothing committed, installer not rebuilt. Out-of-lane files touched: none reported.
 - Not verified: live run, running-app UI, installer not rebuilt, nothing committed.
 
+### Deep search changes since `ad89561` (commits b2abe8d, d009bb1, c921074, e7953a8, 6a94ff0)
+
+Summary only; details are in the dated bullets under Phase 7c above (agent-reported; the later commits are in git history). Commit list verified by the main session from the git log.
+- JSearch `QUERIES` is now 6 (junior backend developer, junior QA engineer, junior python developer, graduate software engineer, graduate backend engineer, junior software engineer in Israel). Page 2 only for 'junior software engineer in Israel', so up to 7 requests per run. Cursor field names are ASSUMED and UNVERIFIED live (page 2 is skipped with a note if no cursor comes back).
+- Per-reason drop counts in "Last run", "Clear seen jobs", and an in-memory "Recently dropped" list (max 100, not persisted).
+- SerpApi has still never returned jobs live (unproven).
+- Commits: b2abe8d (two graduate queries, 5 per run), d009bb1 (6th query + 'Junior Software Engineer' fit example), c921074 (drop counts, Clear seen), e7953a8 (Recently dropped list), 6a94ff0 (page 2).
+
+## Phase 7e — Company discovery (PDL probe)
+
+Status: DONE as seeds only (commits fb67a92, d6e24e7). The probe itself was throwaway code outside the repo; the PDL file and rows are not in the repo, and we did not read the PDL usage policy.
+
+Facts below are as reported by the main session when handing this task over (main-session-verified by that session; this docs pass re-verified only the commit log and the seed count of 54 in `src/main/companies/seeds.ts`):
+- Data: People Data Labs free Company dataset (2026-10): 5.8 GB CSV, 37M rows, 71,159 Israeli companies.
+- Probe 1: 4,055 Israeli tech companies with 11+ employees, checked against Greenhouse/Ashby/SmartRecruiters/Lever (~99% coverage after Lever finished): 40 boards with Israel jobs.
+- Probe 2: 8,529 global tech companies with 1,001+ employees, Western countries, no Lever: 27 matches, 20 new. No blocks, 429 or 403 seen.
+- Dry run through the app's real connectors and scoring over 52 boards: 5 boards / 6 passing jobs (WeDev 2, TenenGroup 1, Progeeks, TA9, GitLab-remote).
+- Seeded: WeDev (Greenhouse) and TenenGroup (SmartRecruiters) in fb67a92, then 15 Israeli companies in d6e24e7 (Moon Active, Loora, Connecteam, Mixtiles, MyHeritage, Incrmntal, Stigg, QuantHealth, Beamup, accessiBe, Sweet Security, Kueez, Rapydo, Play-perfect, Oktopost). Seeds are now 54 (53 enabled; SQLink off). New seeds merge into existing installs on startup (additive `seedsApplied` merge).
+- Out-of-lane: job-search updated `companies.test.ts` and `refresh.test.ts` for the new seed counts (test files outside its lane; reported by the main session, not independently checked here).
+- Open: the GitLab "Remote, Israel" listing passed the location filter (possible remote-only gap, unchecked). Six boards had Israel jobs in the probe but none kept by `isKeepableLocation` (tlvtech, wmg, firstpointmobileguard, dueto, grafanalabs, snowflake); not investigated.
+
+## Phase 7f — Sort by
+
+Status: DONE (commits fbea7e6, e55f4a8). FilterBar select with: Best match, Recently visited (Visited tab only), Recently added (`firstSeenAt` desc), Oldest added, Newest posted, Oldest posted. Client-side in `lib/sort.ts`; session-only (not persisted). New `e2e/sort-by.spec.ts` (written by frontend; a test file outside its lane, noted in Notes).
+- Verified by the main session at e55f4a8: typecheck 0 errors, vitest 41 files / 1077 tests, e2e 3/3 (sort-by, table-sorting golden, visited-persistence).
+- Installer `release\job-finder-1.0.0-setup.exe` 87,040,152 bytes (10/18 4:52 PM), unsigned, default icon. Not re-installed or smoke-tested by the main session (per this handoff).
+
 Rejected options (assessments from general knowledge, NOT tested):
 - Apify LinkedIn/Indeed/Glassdoor scrapers: scraping, banned by RULES.md.
 - Google Cloud Talent Solution: employer-side job indexing/search API, not a job search source for us.
@@ -195,6 +222,8 @@ Status: code cleanup APPLIED 2026-10-07. Main-session verification (re-ran): `np
 - [x] (main session / test) Gate: `npm run typecheck`, `npx vitest run` (592 passing) and `npm run build` re-run and verified by the main session. `npm run dist` and the unpacked smoke test are agent-reported by frontend, not re-run by the main session. `npx playwright test` 2/2 was later re-run and verified by the main session (2026-10-08, a6ce41a, see Phase 9 reconcile).
 
 ## Phase 9 — Docs
+
+Note (2026-10-25): the dated verification records in this file (37 seeds, 33 files / 873 tests, etc.) are historical. Current verified state is in `docs/session-handoff.md` and Phase 7f.
 
 - [x] (orchestrator) Final pass: PLAN.md checkboxes reconciled 2026-10-08 (see "Phase 9 reconcile" below).
 - [x] (orchestrator) Re-checked README, CLAUDE.md, AGENTS.md, RULES.md and the agent files against the final code (user-approved fact corrections only): AGENTS.md Layout gained sources/jsearch, jsearchIpc, shared/jsearch, ingest/constants (MIN_SCORE) and the userData files (config.json keys, state files); RULES.md frontend lane and `frontend.md` gained `src/main/jsearchIpc.ts`; `job-search.md` "no paid keys" now points to the JSearch/SerpApi exception; README mentions opt-in Deep search. CLAUDE.md needed no change. No hard rule weakened.
@@ -237,4 +266,7 @@ Honest unverified list: uninstall; SmartScreen; code signing; custom icon; the 3
 - **Git:** the project folder is now a git repository (`git init -b main` run by the main session on 2026-10-07, user-approved). A snapshot commit `3208d9a` exists; the Phase 9a cleanup changes (and the SQLink default-off change) are uncommitted. `.gitignore` gained `test-results/`, `playwright-report/`, `.claude/settings.local.json`. This resolves the earlier docs-analysis note that the docs assume git while the folder was not a repo.
 - **Phase 9a out-of-lane files touched (per RULES.md):** test edited `package.json` (typecheck scripts), outside its lane and NOT approved; frontend edited `src/shared/roles.ts` (job-search lane, approved) and several tests (sanctioned); job-search edited `src/main/jobs/upsert.ts` (its own lane).
 - **Still open overall (2026-10-08):** installed (NSIS) flow only user-confirmed at a high level; uninstall, SmartScreen, code signing, custom icon, 3 h tick, Ctrl+R; SerpApi live yield; further Phase 8 tuning and QA/FDE coverage check; Comeet single-posting `examples:add`; existing installs keep SQLink enabled; agent-file edits need a Claude Code restart. The installer WAS rebuilt (87,034,696 bytes) with the SQLink-off default.
+- **Out-of-lane files touched since `ad89561` (per RULES.md):** job-search edited `companies.test.ts` and `refresh.test.ts` (test files) for the new seed counts; frontend wrote `e2e/sort-by.spec.ts` (test file). Reported by the main session; this docs pass did not re-diff.
+- **Still open overall (2026-10-25), supersedes the 2026-10-08 list:** installed-app unverified items (uninstall, SmartScreen, code signing, custom icon, 3 h tick, Ctrl+R); SerpApi live yield; JSearch page-2 cursor names unverified live; `examples:add` single Comeet posting gap; Indeed example without a title; Electron 39.8.10 `npm audit` advisories (upgrade to 44 is breaking, not done); accessibility polish (not critical); Hebrew boards and HireMeTech not built; trailing-space cosmetic in the dropped-list text; Workday NVIDIA/Intel maintenance-page failure (an outage, not a bug); Lever pace; GitLab remote-listing and six-board location questions (Phase 7e). The seed count is now 54 (53 enabled).
+- **Docs:** README screenshots under `docs/screenshots` are being added separately; they were not present in the repo when this PLAN update was written and are not recorded as done.
 - **Phase 4:** ui-ux assumed score 0-100; job-search's scoring output confirms 0-100.
